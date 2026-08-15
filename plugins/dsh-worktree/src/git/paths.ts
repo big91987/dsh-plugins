@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { GitRunner } from './runner.ts'
 
@@ -94,5 +94,21 @@ export class ManagedRoot {
     if (!isWithin(root, destination)) throw new Error(`dsh-worktree: destination escapes managed root: ${destination}`)
     if (existsSync(destination)) throw new Error(`dsh-worktree: managed destination already exists: ${destination}`)
     return destination
+  }
+
+  candidates(): string[] {
+    if (!existsSync(this.configured)) return []
+    const root = realpathSync(this.configured)
+    const candidates: string[] = []
+    for (const shard of readdirSync(root, { withFileTypes: true })) {
+      if (!/^[0-9a-f]{4}$/.test(shard.name) || !shard.isDirectory() || shard.isSymbolicLink()) continue
+      const shardPath = join(root, shard.name)
+      for (const entry of readdirSync(shardPath, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+        const candidate = realpathSync(join(shardPath, entry.name))
+        if (isWithin(root, candidate)) candidates.push(candidate)
+      }
+    }
+    return candidates
   }
 }

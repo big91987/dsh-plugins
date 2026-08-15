@@ -7,6 +7,7 @@ import type {
   WorktreeOwnerId as WorktreeOwnerIdType,
 } from './types.ts'
 
+export { WorktreeId, WorktreeOperationId, WorktreeOwnerId } from './brand.ts'
 export { LocalWorktreeManager } from './git/manager.ts'
 export type { LocalWorktreeConfig } from './git/manager.ts'
 export type {
@@ -21,10 +22,6 @@ export type {
 export type WorktreeId = WorktreeIdType
 export type WorktreeOperationId = WorktreeOperationIdType
 export type WorktreeOwnerId = WorktreeOwnerIdType
-
-export const WorktreeId = (value: string): WorktreeIdType => value as WorktreeIdType
-export const WorktreeOperationId = (value: string): WorktreeOperationIdType => value as WorktreeOperationIdType
-export const WorktreeOwnerId = (value: string): WorktreeOwnerIdType => value as WorktreeOwnerIdType
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

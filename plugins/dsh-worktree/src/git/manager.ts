@@ -1,9 +1,18 @@
 import { createHash } from 'node:crypto'
 import { isAbsolute, join } from 'node:path'
-import type { CreateWorktreeRequest, ManagedWorktree } from '../types.ts'
-import { WorktreeId } from '../index.ts'
+import { WorktreeId, WorktreeOperationId } from '../brand.ts'
+import type {
+  CreateWorktreeRequest,
+  DeleteWorktreeRequest,
+  ManagedWorktree,
+  WorktreeId as WorktreeIdType,
+  WorktreeOwnerId,
+  WorktreeSnapshot,
+} from '../types.ts'
+import { readMetadata, writeInitialMetadata, writeOwner } from './metadata.ts'
 import { ManagedRoot, resolveRepository } from './paths.ts'
 import { GitRunner } from './runner.ts'
+import { createSnapshot } from './snapshot.ts'
 import { transferSupplementalFiles, transferTrackedState } from './transfer.ts'
 
 export interface LocalWorktreeConfig {
@@ -45,6 +54,7 @@ export class LocalWorktreeManager {
       )
       await transferTrackedState(this.runner, source, destination, request.signal)
       await transferSupplementalFiles(this.runner, source, destination, request.signal)
+      await writeInitialMetadata(this.runner, source, destination, id, request.operationId, request.signal)
       if (request.environment !== undefined) {
         throw new Error('dsh-worktree: setup execution is not implemented yet')
       }
@@ -68,6 +78,91 @@ export class LocalWorktreeManager {
       }
       throw error
     }
+  }
+
+  async resolve(id: WorktreeIdType, signal?: AbortSignal): Promise<ManagedWorktree | undefined> {
+    for (const candidate of this.managedRoot.candidates()) {
+      const record = await readMetadata(this.runner, candidate, signal)
+      if (record?.id === id) return record
+    }
+    return undefined
+  }
+
+  async setOwner(id: WorktreeIdType, ownerId: WorktreeOwnerId, signal?: AbortSignal): Promise<void> {
+    const record = await this.resolve(id, signal)
+    if (record === undefined) throw new Error(`dsh-worktree: unknown managed Worktree ${id}`)
+    await writeOwner(this.runner, record.path, ownerId, signal)
+  }
+
+  async snapshot(id: WorktreeIdType, signal?: AbortSignal): Promise<WorktreeSnapshot> {
+    const record = await this.resolve(id, signal)
+    if (record === undefined) throw new Error(`dsh-worktree: unknown managed Worktree ${id}`)
+    return createSnapshot(this.runner, record, signal)
+  }
+
+  async restore(snapshot: WorktreeSnapshot, signal?: AbortSignal): Promise<ManagedWorktree> {
+    let commit: string
+    try {
+      commit = (await this.runner.run(
+        ['git', '-C', snapshot.repositoryRoot, 'rev-parse', '--verify', `${snapshot.ref}^{commit}`],
+        { cwd: snapshot.repositoryRoot, ...(signal === undefined ? {} : { signal }) },
+      )).stdout
+    } catch (error) {
+      throw new Error(`dsh-worktree: snapshot ref is missing: ${snapshot.ref}`, { cause: error })
+    }
+    const repositoryBasename = snapshot.repositoryRoot.split(/[\\/]/u).at(-1) ?? 'repository'
+    const destination = this.managedRoot.destination(
+      shardFor(snapshot.repositoryCommonDir, String(snapshot.id)),
+      repositoryBasename,
+    )
+    try {
+      await this.runner.run(
+        ['git', '-C', snapshot.repositoryRoot, 'worktree', 'add', '--detach', destination, commit],
+        { cwd: snapshot.repositoryRoot, ...(signal === undefined ? {} : { signal }) },
+      )
+      const source = {
+        root: snapshot.repositoryRoot,
+        commonDir: snapshot.repositoryCommonDir,
+        relativeCwd: snapshot.relativeCwd,
+        head: snapshot.sourceHead,
+        basename: repositoryBasename,
+      }
+      await writeInitialMetadata(
+        this.runner,
+        source,
+        destination,
+        snapshot.id,
+        WorktreeOperationId(String(snapshot.id)),
+        signal,
+      )
+      if (snapshot.ownerId !== undefined) await writeOwner(this.runner, destination, snapshot.ownerId, signal)
+      const restored = await readMetadata(this.runner, destination, signal)
+      if (restored === undefined) throw new Error(`dsh-worktree: restored metadata is missing for ${snapshot.id}`)
+      return restored
+    } catch (error) {
+      try {
+        await this.runner.run(
+          ['git', '-C', snapshot.repositoryRoot, 'worktree', 'remove', '--force', destination],
+          { cwd: snapshot.repositoryRoot },
+        )
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], `dsh-worktree: failed to restore and clean ${destination}`)
+      }
+      throw error
+    }
+  }
+
+  async delete(request: DeleteWorktreeRequest): Promise<void> {
+    const record = await this.resolve(request.id, request.signal)
+    if (record === undefined) throw new Error(`dsh-worktree: unknown managed Worktree ${request.id}`)
+    await this.runner.run(
+      [
+        'git', '-C', record.repositoryRoot, 'worktree', 'remove',
+        ...(request.force ? ['--force'] : []),
+        record.path,
+      ],
+      { cwd: record.repositoryRoot, ...(request.signal === undefined ? {} : { signal: request.signal }) },
+    )
   }
 
   async dispose(): Promise<void> {}
