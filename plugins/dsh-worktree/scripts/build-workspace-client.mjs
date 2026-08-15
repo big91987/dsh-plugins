@@ -30,7 +30,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     '\t\tvar exports = module.exports;\n',
-    `\t\tvar exports = module.exports;\n${remoteBundle}\n\t\tconst DSH_WORKTREE_REMOTE = DSHWorktreeRemoteBundle.default;\n\t\tlet continueInNewChat;\n\t\tlet continueInNewWorktree;\n`,
+    `\t\tvar exports = module.exports;\n${remoteBundle}\n\t\tconst DSH_WORKTREE_REMOTE = DSHWorktreeRemoteBundle.default ?? DSHWorktreeRemoteBundle;\n\t\tlet continueInNewChat;\n\t\tlet continueInNewWorktree;\n`,
     'module prelude',
   )
   output = replaceOnce(
@@ -109,6 +109,37 @@ export function transformWorkspaceClient(source, remoteBundle) {
     `\t\t\t\t{\n\t\t\t\t\tid: "fork",\n\t\t\t\t\tlabel: t("menu.fork"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},`,
     `\t\t\t\t{\n\t\t\t\t\tid: "continue-chat",\n\t\t\t\t\tlabel: t("menu.continueChat"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\tid: "continue-worktree",\n\t\t\t\t\tlabel: t("menu.continueWorktree"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderClose16, {})\n\t\t\t\t},`,
     'Fork menu item',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst sessionMenuItems = [',
+    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst [contextMenuPoint, setContextMenuPoint] = (0, react.useState)(null);\n\t\t\tconst sessionMenuItems = [',
+    'Session context-menu anchor state',
+  )
+  output = replaceOnce(
+    output,
+    `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},`,
+    `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},
+\t\t\t\t\tonContextMenu: (e) => {
+\t\t\t\t\t\tif (row.blank) return;
+\t\t\t\t\t\te.preventDefault();
+\t\t\t\t\t\te.stopPropagation();
+\t\t\t\t\t\tsetContextMenuPoint(new DOMRect(e.clientX, e.clientY, 0, 0));
+\t\t\t\t\t\tsetMenuOpen(true);
+\t\t\t\t\t},`,
+    'Session row context-menu handler',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,',
+    '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tgetAnchorRect: contextMenuPoint === null ? void 0 : () => contextMenuPoint,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,',
+    'Session context-menu cursor anchor',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
+    '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetContextMenuPoint(null);\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
+    'Session overflow anchor reset',
   )
   output = replaceOnce(
     output,
