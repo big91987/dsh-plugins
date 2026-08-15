@@ -1,22 +1,42 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { LocalWorktreeManager } from './git/manager.ts'
+import type { LocalWorktreeConfig } from './git/manager.ts'
+import type {
+  WorktreeId as WorktreeIdType,
+  WorktreeOperationId as WorktreeOperationIdType,
+  WorktreeOwnerId as WorktreeOwnerIdType,
+} from './types.ts'
 
-/** Observable proof that the external Worktree Host plugin loaded. */
-export interface DshWorktreeProbe {
-  readonly loaded: true
-}
+export { LocalWorktreeManager } from './git/manager.ts'
+export type { LocalWorktreeConfig } from './git/manager.ts'
+export type {
+  CreateWorktreeRequest,
+  DeleteWorktreeRequest,
+  ManagedWorktree,
+  WorktreeCreationUpdate,
+  WorktreeEnvironment,
+  WorktreeSetupResult,
+  WorktreeSnapshot,
+} from './types.ts'
+export type WorktreeId = WorktreeIdType
+export type WorktreeOperationId = WorktreeOperationIdType
+export type WorktreeOwnerId = WorktreeOwnerIdType
+
+export const WorktreeId = (value: string): WorktreeIdType => value as WorktreeIdType
+export const WorktreeOperationId = (value: string): WorktreeOperationIdType => value as WorktreeOperationIdType
+export const WorktreeOwnerId = (value: string): WorktreeOwnerIdType => value as WorktreeOwnerIdType
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    dshWorktreeProbe: DshWorktreeProbe
+    worktrees: LocalWorktreeManager
   }
 }
 
 export const name = 'dsh-worktree'
 
-/**
- * Provide the Worktree loading probe for this plugin scope.
- * @param ctx - Cordis plugin context.
- */
-export function apply(ctx: Context): void {
-  ctx.provide('dshWorktreeProbe', { loaded: true })
+/** Install the local managed Worktree service for this bundle scope. */
+export function apply(ctx: Context, config: LocalWorktreeConfig): void {
+  const manager = new LocalWorktreeManager(config)
+  ctx.provide('worktrees', manager)
+  ctx.effect(() => async () => { await manager.dispose() })
 }

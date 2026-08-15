@@ -1,19 +1,19 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import * as WorktreeProbePlugin from '../src/index.ts'
+import * as WorktreePlugin from '../src/index.ts'
 
 describe('dsh-worktree host plugin', () => {
-  it('provides its probe service for exactly the plugin lifetime', async () => {
+  it('provides its Worktree service for exactly the plugin lifetime', async () => {
     const ctx = new Context()
-    const fiber = await ctx.plugin(WorktreeProbePlugin)
+    const fiber = await ctx.plugin(WorktreePlugin, { worktreeRoot: '/tmp/dsh-worktree-host-spec' })
     const services = ctx as Context & {
-      dshWorktreeProbe?: { readonly loaded: true }
+      worktrees?: WorktreePlugin.LocalWorktreeManager
     }
 
-    expect(services.dshWorktreeProbe).toEqual({ loaded: true })
+    expect(services.worktrees).toBeInstanceOf(WorktreePlugin.LocalWorktreeManager)
 
     await fiber.dispose()
 
-    expect(services.dshWorktreeProbe).toBeUndefined()
+    expect(services.worktrees).toBeUndefined()
   })
 })
