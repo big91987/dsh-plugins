@@ -4,21 +4,22 @@
   "description": "Peer top-level Session coordination tools for DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
+      "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
+    "lib/index.js",
+    "lib/types",
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts",
+    "build": "tsdown --config tsdown.config.ts && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

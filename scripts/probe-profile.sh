@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-reference_root="${DSH_REFERENCE_ROOT:-/Users/zhaojiuzhou/work/deepseek-harness}"
+dsh_version="${DSH_VERSION:-0.1.0-rc.6}"
 probe_home="$(mktemp -d /var/tmp/dsh-plugins-probe.XXXXXX)"
 
 cleanup() {
@@ -15,10 +15,7 @@ cleanup() {
 trap cleanup EXIT
 
 run_dsh() {
-  (
-    cd "$reference_root"
-    DSH_HOME="$probe_home" pnpm dsh "$@"
-  )
+  DSH_HOME="$probe_home" pnpm dlx "@deepseek-ai/dsh@$dsh_version" "$@"
 }
 
 cd "$repository_root"
