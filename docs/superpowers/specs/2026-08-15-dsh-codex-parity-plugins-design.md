@@ -84,6 +84,8 @@ The gate produces one of three decisions:
 
 The implementation must not silently turn an in-tree patch into a purported external plugin.
 
+The rc.6 result is recorded in `docs/decisions/0001-external-extension-points.md`: Host features can remain additive, but the published Workspace UI has no Session-row action extension point. `dsh-worktree` will disable the built-in `ui-workspace` row and insert a compatibility replacement that preserves the complete Workspace surface plus the two continuation actions. `dsh-session-coordination` remains purely additive.
+
 ## Verification
 
 Each package must independently pass unit tests, strict type checking, build, package-content inspection, and clean-directory installation. A disposable DSH profile must prove bundle discovery, effective configuration, Host loading, browser client loading where applicable, and removal. End-to-end acceptance must exercise real Session continuation and peer Session coordination without a model API key wherever the upstream test harness permits it.
