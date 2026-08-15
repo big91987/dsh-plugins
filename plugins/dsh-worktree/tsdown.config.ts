@@ -37,7 +37,7 @@ export default defineConfig([
   {
     clean: false,
     dts: false,
-    entry: { 'typert.remote-browser': 'src/remote-client.ts' },
+    entry: { 'typert.remote-browser': 'src/remote-browser.ts' },
     fixedExtension: false,
     format: ['iife'],
     globalName: 'DSHWorktreeRemoteBundle',
