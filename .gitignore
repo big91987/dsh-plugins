@@ -2,4 +2,5 @@ node_modules/
 lib/
 .artifacts/
 coverage/
+.playwright-cli/
 *.tgz

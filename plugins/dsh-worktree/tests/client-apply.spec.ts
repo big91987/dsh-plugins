@@ -1,37 +1,19 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it } from 'vitest'
-import { apply } from '../src/client/index.ts'
+import { describe, expect, it, vi } from 'vitest'
+import worktreeRemote from '../src/remote-client.ts'
+import { apply, inject } from '../src/client/index.ts'
 
-const originalDocument = globalThis.document
+describe('dsh-worktree browser plugin', () => {
+  it('mounts and disposes its strict Worktree Remote contribution', async () => {
+    const dispose = vi.fn(() => Promise.resolve())
+    const mount = vi.fn(() => Promise.resolve(dispose))
+    const ctx = { remote: { $mount: mount } } as unknown as Context
 
-afterEach(() => {
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: originalDocument,
-  })
-})
+    const cleanup = await apply(ctx)
 
-describe('dsh-worktree browser loading probe', () => {
-  it('publishes a DOM marker for its plugin lifetime', () => {
-    const dataset: Record<string, string | undefined> = {}
-    let dispose: (() => void) | undefined
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: { documentElement: { dataset } },
-    })
-    const ctx = {
-      effect(setup: () => () => void) {
-        dispose = setup()
-      },
-      provide() {},
-    } as unknown as Context
-
-    apply(ctx)
-
-    expect(dataset.dshWorktreeProbe).toBe('loaded')
-
-    dispose?.()
-
-    expect(dataset.dshWorktreeProbe).toBeUndefined()
+    expect(inject).toEqual(['remote'])
+    expect(mount).toHaveBeenCalledWith(worktreeRemote)
+    await cleanup()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 })

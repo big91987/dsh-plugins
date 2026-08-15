@@ -165,7 +165,7 @@ export class SessionContinuation {
         ...(presetId === undefined ? {} : { agentPreset: presetId }),
       },
       ...(signal === undefined ? {} : { signal }),
-      setup: async agentContext => this.host.agentPresets.mount(agentContext, presetId),
+      setup: async agentContext => { await this.host.agentPresets.mount(agentContext, presetId) },
     })
     return childId
   }

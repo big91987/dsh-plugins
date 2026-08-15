@@ -22,7 +22,7 @@ function setupHost() {
   const host: ContinuationHost = {
     sessionQuery: { readSession: vi.fn(() => Promise.resolve(source)), traceSession: vi.fn() },
     agents: { create: createAgent },
-    agentPresets: { mount: vi.fn(() => Promise.resolve()) },
+    agentPresets: { mount: vi.fn(() => Promise.resolve({ mounted: true })) },
     workspaceRegistry: { list: () => [], create: vi.fn(() => Promise.resolve(workspace)) },
   }
   return { host, createAgent, attachSession }

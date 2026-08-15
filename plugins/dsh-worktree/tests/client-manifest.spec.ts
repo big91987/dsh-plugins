@@ -13,7 +13,16 @@ describe('dsh-worktree browser face', () => {
       types: './lib/types/client/index.d.ts',
       default: './lib/client.js',
     })
-    expect(manifest.dsh?.client).toEqual({ inject: [], platform: 'web' })
+    expect(manifest.dsh?.client).toEqual({
+      inject: [
+        '@deepseek-ai/dsh-api-gateway',
+        '@deepseek-ai/dsh-client-locale',
+        '@deepseek-ai/dsh-client-runtime',
+        '@deepseek-ai/dsh-client-ui-conversation',
+        '@deepseek-ai/dsh-client-ui-sidebar',
+      ],
+      platform: 'web',
+    })
     expect(manifest.files).toContain('lib/client.js')
     expect(manifest.files).toContain('lib/types')
   })

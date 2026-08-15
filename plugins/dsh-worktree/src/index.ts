@@ -3,6 +3,7 @@ import { LocalWorktreeManager } from './git/manager.ts'
 import type { LocalWorktreeConfig } from './git/manager.ts'
 import { SessionContinuation } from './continuation/service.ts'
 import type { ContinuationHost } from './continuation/service.ts'
+import { WorktreeRemote } from './remote.ts'
 import type {
   WorktreeId as WorktreeIdType,
   WorktreeOperationId as WorktreeOperationIdType,
@@ -28,6 +29,8 @@ export type {
 } from './continuation/service.ts'
 export { completedHistory, ContinuationUnavailableError } from './continuation/history.ts'
 export type { PendingSessionOutput, PendingSessionSnapshot, PendingSessionStage } from './continuation/pending.ts'
+export { WorktreeRemote } from './remote.ts'
+export type { ContinueInChatWireRequest, RetryPendingRequest } from './remote.ts'
 export type {
   CreateWorktreeRequest,
   DeleteWorktreeRequest,
@@ -65,5 +68,6 @@ export function apply(ctx: Context, config: LocalWorktreeConfig): void {
     )
     continuationContext.provide('sessionContinuation', continuation)
     continuationContext.effect(() => async () => { await continuation.dispose() })
+    new WorktreeRemote(continuationContext)
   })
 }

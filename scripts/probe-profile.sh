@@ -21,10 +21,11 @@ run_dsh() {
 cd "$repository_root"
 pnpm build
 
-run_dsh plugin --profile dsh-plugins-probe add "$repository_root/plugins/dsh-worktree"
-run_dsh plugin --profile dsh-plugins-probe add "$repository_root/plugins/dsh-session-coordination"
+run_dsh web --dump-config >/dev/null
+run_dsh plugin --profile web add "$repository_root/plugins/dsh-worktree"
+run_dsh plugin --profile web add "$repository_root/plugins/dsh-session-coordination"
 
-dump="$(run_dsh --profile dsh-plugins-probe --dump-config)"
+dump="$(run_dsh web --dump-config)"
 printf '%s\n' "$dump"
 
 grep -Fq '# == dsh-worktree' <<<"$dump"
@@ -32,5 +33,5 @@ grep -Fq 'name: dsh-worktree' <<<"$dump"
 grep -Fq '# == dsh-session-coordination' <<<"$dump"
 grep -Fq 'name: dsh-session-coordination' <<<"$dump"
 
-run_dsh plugin --profile dsh-plugins-probe remove dsh-session-coordination
-run_dsh plugin --profile dsh-plugins-probe remove dsh-worktree
+run_dsh plugin --profile web remove dsh-session-coordination
+run_dsh plugin --profile web remove dsh-worktree

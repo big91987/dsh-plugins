@@ -18,7 +18,7 @@ describe('SessionContinuation.continueInChat', () => {
     const source = sourceLog()
     const attachSession = vi.fn(() => Promise.resolve())
     const create = vi.fn((_options: Parameters<ContinuationHost['agents']['create']>[0]) => Promise.resolve())
-    const mount = vi.fn(() => Promise.resolve())
+    const mount = vi.fn(() => Promise.resolve({ mounted: true }))
     const host: ContinuationHost = {
       sessionQuery: {
         readSession: vi.fn(() => Promise.resolve(source)),
@@ -49,7 +49,7 @@ describe('SessionContinuation.continueInChat', () => {
     }))
     const setup = create.mock.calls[0]?.[0]?.setup
     expect(setup).toBeTypeOf('function')
-    await setup?.({ child: true })
+    await expect(setup?.({ child: true })).resolves.toBeUndefined()
     expect(mount).toHaveBeenCalledWith({ child: true }, 'coding')
     expect(attachSession).toHaveBeenCalledWith(result.sessionId)
   })

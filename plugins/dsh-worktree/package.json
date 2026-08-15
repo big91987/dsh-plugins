@@ -14,6 +14,14 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./typert": {
+      "types": "./lib/types/typert.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/types/remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -21,10 +29,13 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types",
+    "lib/typert.host.js",
+    "lib/typert.remote-client.js",
+    "THIRD_PARTY_NOTICES.md",
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts && tsc -p tsconfig.build.json",
+    "build": "tsdown --config tsdown.config.ts && node scripts/build-workspace-client.mjs && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -40,7 +51,13 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "inject": [],
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
       "platform": "web"
     },
     "compatibility": {
@@ -51,6 +68,11 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-workspace": "0.1.0-rc.6"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.6",
+    "zod": "4.4.3"
   }
 }

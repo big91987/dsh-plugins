@@ -1,24 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis'
+import worktreeRemote from '../remote-client.ts'
 
-/** Observable proof that the external Worktree browser plugin loaded. */
-export interface DshWorktreeClientProbe {
-  readonly loaded: true
+interface ClientRemoteMount {
+  $mount(contribution: typeof worktreeRemote): Promise<() => Promise<void>>
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    dshWorktreeClientProbe: DshWorktreeClientProbe
-  }
-}
+/** Required Client service that transports strict Typert invocations. */
+export const inject = ['remote']
 
-/**
- * Provide the Worktree browser loading probe for this plugin scope.
- * @param ctx - browser Cordis plugin context.
- */
-export function apply(ctx: Context): void {
-  ctx.provide('dshWorktreeClientProbe', { loaded: true })
-  ctx.effect(() => {
-    document.documentElement.dataset.dshWorktreeProbe = 'loaded'
-    return () => { delete document.documentElement.dataset.dshWorktreeProbe }
-  }, 'dsh-worktree: browser loading marker')
+/** Mount the Worktree Remote namespace for the lifetime of this browser plugin. */
+export async function apply(ctx: Context): Promise<() => Promise<void>> {
+  const remote = (ctx as Context & { remote: ClientRemoteMount }).remote
+  return remote.$mount(worktreeRemote)
 }
