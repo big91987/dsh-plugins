@@ -1,1 +1,3 @@
-[]
+- insert:
+    - id: dsh-session-coordination
+      name: dsh-session-coordination

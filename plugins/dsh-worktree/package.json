@@ -18,7 +18,7 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --dts",
+    "build": "tsdown --config tsdown.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
