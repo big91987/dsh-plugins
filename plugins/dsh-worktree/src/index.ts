@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { LocalWorktreeManager } from './git/manager.ts'
 import type { LocalWorktreeConfig } from './git/manager.ts'
+import { SessionContinuation } from './continuation/service.ts'
+import type { ContinuationHost } from './continuation/service.ts'
 import type {
   WorktreeId as WorktreeIdType,
   WorktreeOperationId as WorktreeOperationIdType,
@@ -12,6 +14,20 @@ export { LocalWorktreeManager } from './git/manager.ts'
 export type { LocalWorktreeConfig } from './git/manager.ts'
 export { NodeSetupRuntime } from './git/setup.ts'
 export type { SetupRuntime } from './git/setup.ts'
+export {
+  ContinuationWorkspaceAttachError,
+  SessionContinuation,
+} from './continuation/service.ts'
+export type {
+  ContinuationHost,
+  ContinuationWorktrees,
+  ContinueInChatRequest,
+  ContinueInChatResult,
+  ContinueInWorktreeRequest,
+  ContinueInWorktreeResult,
+} from './continuation/service.ts'
+export { completedHistory, ContinuationUnavailableError } from './continuation/history.ts'
+export type { PendingSessionOutput, PendingSessionSnapshot, PendingSessionStage } from './continuation/pending.ts'
 export type {
   CreateWorktreeRequest,
   DeleteWorktreeRequest,
@@ -28,6 +44,7 @@ export type WorktreeOwnerId = WorktreeOwnerIdType
 declare module '@deepseek-ai/cordis' {
   interface Context {
     worktrees: LocalWorktreeManager
+    sessionContinuation: SessionContinuation
   }
 }
 
@@ -40,4 +57,13 @@ export function apply(ctx: Context, config: LocalWorktreeConfig): void {
   const manager = new LocalWorktreeManager(config, services.subprocess)
   ctx.provide('worktrees', manager)
   ctx.effect(() => async () => { await manager.dispose() })
+  ctx.inject(['agents', 'sessionQuery', 'agentPresets', 'workspaceRegistry'], continuationContext => {
+    const continuation = new SessionContinuation(
+      continuationContext as unknown as ContinuationHost,
+      manager,
+      config.maxSetupOutputBytes,
+    )
+    continuationContext.provide('sessionContinuation', continuation)
+    continuationContext.effect(() => async () => { await continuation.dispose() })
+  })
 }
