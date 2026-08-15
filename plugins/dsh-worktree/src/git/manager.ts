@@ -12,12 +12,16 @@ import type {
 import { readMetadata, writeInitialMetadata, writeOwner } from './metadata.ts'
 import { ManagedRoot, resolveRepository } from './paths.ts'
 import { GitRunner } from './runner.ts'
+import { NodeSetupRuntime, runSetup } from './setup.ts'
+import type { SetupRuntime } from './setup.ts'
 import { createSnapshot } from './snapshot.ts'
 import { transferSupplementalFiles, transferTrackedState } from './transfer.ts'
 
 export interface LocalWorktreeConfig {
   readonly worktreeRoot: string
   readonly maxOutputBytes?: number
+  readonly maxSetupOutputBytes?: number
+  readonly graceMs?: number
 }
 
 function shardFor(commonDir: string, identity: string): string {
@@ -28,8 +32,10 @@ function shardFor(commonDir: string, identity: string): string {
 export class LocalWorktreeManager {
   private readonly runner: GitRunner
   private readonly managedRoot: ManagedRoot
+  private readonly maxSetupOutputBytes: number
+  private readonly graceMs: number
 
-  constructor(config: LocalWorktreeConfig) {
+  constructor(config: LocalWorktreeConfig, private readonly setupRuntime: SetupRuntime = new NodeSetupRuntime()) {
     if (!isAbsolute(config.worktreeRoot)) throw new TypeError('dsh-worktree: worktreeRoot must be absolute')
     const maxOutputBytes = config.maxOutputBytes ?? 8 * 1024 * 1024
     if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
@@ -37,6 +43,14 @@ export class LocalWorktreeManager {
     }
     this.runner = new GitRunner(maxOutputBytes)
     this.managedRoot = new ManagedRoot(config.worktreeRoot)
+    this.maxSetupOutputBytes = config.maxSetupOutputBytes ?? 1_048_576
+    this.graceMs = config.graceMs ?? 3_000
+    if (!Number.isSafeInteger(this.maxSetupOutputBytes) || this.maxSetupOutputBytes < 1) {
+      throw new TypeError('dsh-worktree: maxSetupOutputBytes must be a positive safe integer')
+    }
+    if (!Number.isSafeInteger(this.graceMs) || this.graceMs < 1) {
+      throw new TypeError('dsh-worktree: graceMs must be a positive safe integer')
+    }
   }
 
   async create(request: CreateWorktreeRequest): Promise<ManagedWorktree> {
@@ -55,8 +69,18 @@ export class LocalWorktreeManager {
       await transferTrackedState(this.runner, source, destination, request.signal)
       await transferSupplementalFiles(this.runner, source, destination, request.signal)
       await writeInitialMetadata(this.runner, source, destination, id, request.operationId, request.signal)
+      let setup: ManagedWorktree['setup'] = { kind: 'skipped' }
       if (request.environment !== undefined) {
-        throw new Error('dsh-worktree: setup execution is not implemented yet')
+        request.onUpdate?.({ kind: 'stage', stage: 'setting-up' })
+        setup = await runSetup(this.setupRuntime, {
+          environment: request.environment,
+          sourceWorkspace: source.root,
+          worktreeWorkspace: destination,
+          maxOutputBytes: this.maxSetupOutputBytes,
+          graceMs: this.graceMs,
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+          ...(request.onUpdate === undefined ? {} : { onUpdate: request.onUpdate }),
+        })
       }
       return {
         id,
@@ -65,7 +89,7 @@ export class LocalWorktreeManager {
         repositoryRoot: source.root,
         repositoryCommonDir: source.commonDir,
         sourceHead: source.head,
-        setup: { kind: 'skipped' },
+        setup,
       }
     } catch (error) {
       try {

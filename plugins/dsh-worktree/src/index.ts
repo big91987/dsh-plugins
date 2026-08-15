@@ -10,6 +10,8 @@ import type {
 export { WorktreeId, WorktreeOperationId, WorktreeOwnerId } from './brand.ts'
 export { LocalWorktreeManager } from './git/manager.ts'
 export type { LocalWorktreeConfig } from './git/manager.ts'
+export { NodeSetupRuntime } from './git/setup.ts'
+export type { SetupRuntime } from './git/setup.ts'
 export type {
   CreateWorktreeRequest,
   DeleteWorktreeRequest,
@@ -30,10 +32,12 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export const name = 'dsh-worktree'
+export const inject = ['subprocess']
 
 /** Install the local managed Worktree service for this bundle scope. */
 export function apply(ctx: Context, config: LocalWorktreeConfig): void {
-  const manager = new LocalWorktreeManager(config)
+  const services = ctx as Context & { subprocess: import('./git/setup.ts').SetupRuntime }
+  const manager = new LocalWorktreeManager(config, services.subprocess)
   ctx.provide('worktrees', manager)
   ctx.effect(() => async () => { await manager.dispose() })
 }
