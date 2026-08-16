@@ -119,6 +119,69 @@ describe('SessionCoordination delivery', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
+  it('cold-resumes a stored Session with its last routed provider/model so the persona {{model}} variable resolves', async () => {
+    const { ctx, target, agents, readSession, resume } = fixture()
+    agents.delete(target.id)
+    const dispose = vi.fn().mockResolvedValue(undefined)
+    const resumeOptions: { resumeSessionId?: unknown; agentOptions?: unknown }[] = []
+    resume.mockImplementation(async (options: {
+      resumeSessionId?: unknown
+      agentOptions?: unknown
+      setup?: (agentCtx: Context) => Promise<void>
+    }) => {
+      resumeOptions.push({ resumeSessionId: options.resumeSessionId, agentOptions: options.agentOptions })
+      await options.setup?.(ctx)
+      return { agent: target, dispose }
+    })
+    // The stored Session was last routed on deepseek-official / deepseek-v4-pro.
+    readSession.mockResolvedValueOnce({
+      session: header('target', { origin: undefined }),
+      events: [
+        event(0),
+        {
+          seq: 1,
+          time: 30,
+          type: 'request/header',
+          data: {
+            header: { config: { provider: 'deepseek-official', model: 'deepseek-v4-pro' } },
+            reason: 'initial',
+          },
+        } as SessionEvent,
+        event(2, 'turn/end'),
+      ],
+    })
+    const service = new SessionCoordination(ctx)
+
+    await service.sendMessage(SessionId('sender'), target.id, 'check this')
+
+    expect(resume).toHaveBeenCalledOnce()
+    expect(resumeOptions[0]).toEqual({
+      resumeSessionId: target.id,
+      agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+    })
+  })
+
+  it('cold-resumes without agentOptions when the stored Session has no request/header event', async () => {
+    const { ctx, target, agents, readSession, resume } = fixture()
+    agents.delete(target.id)
+    const dispose = vi.fn().mockResolvedValue(undefined)
+    const resumeOptions: { agentOptions?: unknown }[] = []
+    resume.mockImplementation(async (options: { agentOptions?: unknown }) => {
+      resumeOptions.push({ agentOptions: options.agentOptions })
+      return { agent: target, dispose }
+    })
+    readSession.mockResolvedValueOnce({
+      session: header('target', { origin: undefined }),
+      events: [event(0), event(1, 'turn/end')],
+    })
+    const service = new SessionCoordination(ctx)
+
+    await service.sendMessage(SessionId('sender'), target.id, 'check this')
+
+    expect(resume).toHaveBeenCalledOnce()
+    expect(resumeOptions[0]).toEqual({ agentOptions: undefined })
+  })
+
   it('rejects cold resumption of a stored subagent Session', async () => {
     const { ctx, target, agents, readSession } = fixture()
     agents.delete(target.id)

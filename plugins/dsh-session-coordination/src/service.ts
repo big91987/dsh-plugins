@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentOptions } from '@deepseek-ai/dsh-agent'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -34,6 +34,28 @@ declare module '@deepseek-ai/cordis' {
 
 function cursorOf(events: readonly SessionEvent[]): number {
   return events.at(-1)?.seq ?? -1
+}
+
+/**
+ * Recover the provider/model a Session was last routed on from its event log.
+ * A cold-resumed agent needs `AgentOptions.provider/model` so the deployment
+ * persona's `{{model}}` prompt variable resolves; otherwise prompt assembly
+ * fails with `prompt variable "{{model}}" has no value` (the variable provider
+ * reads `agent.options.model`, which is empty when resume passes no options).
+ * The latest `request/header` event is the authoritative route the session
+ * actually used.
+ */
+function lastRoutedAgentOptions(events: readonly SessionEvent[]): AgentOptions | undefined {
+  let provider: string | undefined
+  let model: string | undefined
+  for (const event of events) {
+    if (event.type !== 'request/header') continue
+    const config = event.data.header.config
+    if (config.provider.length > 0) provider = config.provider
+    if (config.model.length > 0) model = config.model
+  }
+  if (provider === undefined || model === undefined) return undefined
+  return { provider, model }
 }
 
 /** Coordinates independent top-level Sessions without making them subagents. */
@@ -195,11 +217,16 @@ export class SessionCoordination {
     signal?: AbortSignal,
   ): Promise<Agent> {
     const preset = resolveSessionPreset({ header: source.session, events: source.events })
+    // Cold-resume must restore the Session's last routed model: the persona
+    // template's `{{model}}` variable reads agent.options.model, and without
+    // agentOptions the resumed agent has no model, failing prompt assembly.
+    const agentOptions = lastRoutedAgentOptions(source.events)
     let handle: AgentHandle
     try {
       handle = await this.ctx.agents.resume({
         resumeSessionId: id,
         ...(signal === undefined ? {} : { signal }),
+        ...(agentOptions === undefined ? {} : { agentOptions }),
         setup: async agentCtx => { await this.ctx.agentPresets.mount(agentCtx, preset) },
       })
     } catch (error) {
