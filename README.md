@@ -1,18 +1,35 @@
 # DSH plugins
 
-Two independently installable DeepSeek Harness plugins, currently pinned to `@deepseek-ai/dsh@0.1.0-rc.6`:
+[简体中文](README.zh-CN.md) | English
 
-- `dsh-worktree`: Codex-style **Continue in new chat** and **Continue in new worktree** actions, including managed Git Worktrees and recovery UI.
-- `dsh-session-coordination`: Codex-style discovery, reading, messaging, waiting, and forking across independent top-level Sessions.
+Three independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.0-rc.6`:
 
-They share a repository for maintenance, but neither package depends on the other. Install either plugin by itself or install both into the `web` profile.
+- [`dsh-worktree`](plugins/dsh-worktree/README.md): Codex-style **Continue in new chat** and **Continue in new worktree** Session actions, automatic opening, same-project Worktree projection, managed Git Worktrees, and recovery UI.
+- [`dsh-session-coordination`](plugins/dsh-session-coordination/README.md): discovery, history reading, messaging, waiting, and forking across independent top-level Sessions.
+- [`dsh-compact-img`](plugins/dsh-compact-img/README.md): `/compact-img`, which replaces image-bearing history spans with text checkpoints before switching to a text-only model.
+
+The packages share this repository for maintenance but have no runtime dependency on one another. Install any subset into the `web` profile.
+
+## Source installation
+
+This is currently a source-distributed monorepo, not a single bundle installable from the repository root. Clone it, keep the checkout in a stable location, build it, and add the required package directories to the DSH profile:
 
 ```sh
-pnpm install
+git clone https://github.com/big91987/dsh-plugins.git
+cd dsh-plugins
+pnpm install --frozen-lockfile
 pnpm build
 
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-worktree
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-session-coordination
+npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-worktree
+npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-session-coordination
+npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-compact-img
+npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-The repository containing DeepSeek Harness source is a reference only; development, commits, and packaging for these plugins happen in this repository.
+Local profile dependencies link to this checkout, so do not move or delete it while the plugins are installed. See the [Chinese guide](README.zh-CN.md) for usage, updates, uninstall instructions, persistent-data behavior, troubleshooting, and the accepted differences from the current official extension surface.
+
+## Compatibility
+
+The repository intentionally targets the tested `0.1.0-rc.6` Host and client contracts. `dsh-session-coordination` and `dsh-compact-img` are additive Host bundles. `dsh-worktree` additionally derives its browser contribution from the checksum-pinned official rc.6 Workspace client because that release has no public Session-row action extension point. A later DSH release requires explicit compatibility verification and likely a Worktree client update.
+
+The DeepSeek Harness source checkout is reference-only. Plugin development, commits, packaging, and releases happen in this repository.
