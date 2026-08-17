@@ -2,7 +2,7 @@
 
 Adds the Codex-style Session row actions **Continue in new chat** and **Continue in new worktree** to DeepSeek Harness `0.1.0-rc.6`.
 
-The Worktree action creates a detached managed Git Worktree, copies configured working-tree changes, optionally runs setup, publishes a new Workspace and Session, and exposes live or terminal progress. Failed setup can be retried, cancelled, dismissed, or explicitly continued without setup.
+The Worktree action creates a detached managed Git Worktree, copies configured working-tree changes, optionally runs setup, and publishes a new Session. The Host retains a separate internal Workspace for the Worktree directory, while the browser projects its Sessions under the original project with a Worktree marker. A successful continuation opens automatically. Failed setup can be retried, cancelled, dismissed, or explicitly continued without setup.
 
 ```sh
 pnpm --filter dsh-worktree build

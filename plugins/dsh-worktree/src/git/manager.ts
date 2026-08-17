@@ -112,6 +112,16 @@ export class LocalWorktreeManager {
     return undefined
   }
 
+  /** List managed Worktrees recovered from their durable Git metadata. */
+  async list(signal?: AbortSignal): Promise<readonly ManagedWorktree[]> {
+    const records: ManagedWorktree[] = []
+    for (const candidate of this.managedRoot.candidates()) {
+      const record = await readMetadata(this.runner, candidate, signal)
+      if (record !== undefined) records.push(record)
+    }
+    return records
+  }
+
   async setOwner(id: WorktreeIdType, ownerId: WorktreeOwnerId, signal?: AbortSignal): Promise<void> {
     const record = await this.resolve(id, signal)
     if (record === undefined) throw new Error(`dsh-worktree: unknown managed Worktree ${id}`)

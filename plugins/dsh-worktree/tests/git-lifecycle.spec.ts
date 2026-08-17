@@ -25,6 +25,14 @@ describe('LocalWorktreeManager recovery lifecycle', () => {
       })
       const ownerId = WorktreeOwnerId('owner-session')
       await manager.setOwner(created.id, ownerId)
+      await expect(manager.list()).resolves.toEqual([
+        expect.objectContaining({
+          id: created.id,
+          cwd: created.cwd,
+          repositoryRoot: repository.root,
+          ownerId,
+        }),
+      ])
       const statusBefore = git(created.path, ['status', '--porcelain=v1', '-z'])
 
       const snapshot = await manager.snapshot(created.id)

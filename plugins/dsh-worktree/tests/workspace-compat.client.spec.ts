@@ -2,9 +2,28 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error The Node build transformer is intentionally plain ESM.
-import { transformWorkspaceClient } from '../scripts/build-workspace-client.mjs'
+import { projectWorktreeWorkspaces, transformWorkspaceClient } from '../scripts/build-workspace-client.mjs'
 
 describe('rc.6 Workspace compatibility transform', () => {
+  it('projects managed Worktree Workspaces into their original project, including nested Worktrees', () => {
+    const projected = projectWorktreeWorkspaces([
+      { workspaceId: 'source', path: '/repo/app', title: 'repo', sessionIds: ['source-session'] },
+      { workspaceId: 'first', path: '/managed/one/app', title: 'app', sessionIds: ['first-session'] },
+      { workspaceId: 'second', path: '/managed/two/app', title: 'app', sessionIds: ['second-session'] },
+    ], [
+      { sourceWorkspacePath: '/repo/app', worktreeWorkspacePath: '/managed/one/app' },
+      { sourceWorkspacePath: '/managed/one/app', worktreeWorkspacePath: '/managed/two/app' },
+    ])
+
+    expect(projected).toEqual([{
+      workspaceId: 'source',
+      path: '/repo/app',
+      title: 'repo',
+      sessionIds: ['source-session', 'first-session', 'second-session'],
+      worktreeSessionIds: ['first-session', 'second-session'],
+    }])
+  })
+
   it('derives the replacement from the pinned official bundle and adds both continuation actions', async () => {
     const require = createRequire(import.meta.url)
     const official = await readFile(require.resolve('@deepseek-ai/dsh-client-ui-workspace/client'), 'utf8')
@@ -27,12 +46,21 @@ describe('rc.6 Workspace compatibility transform', () => {
     expect(transformed).toContain('ctx.sessions.open(result.value.sessionId)')
     expect(transformed).toContain('function PendingWorktrees')
     expect(transformed).toContain('worktreeRemote.listPending()')
+    expect(transformed).toContain('worktreeRemote.listWorkspaceMappings()')
     expect(transformed).toContain('worktreeRemote.retryPending')
     expect(transformed).toContain('worktreeRemote.cancelPending')
     expect(transformed).toContain('worktreeRemote.continuePendingWithoutSetup')
     expect(transformed).toContain('worktreeRemote.dismissPending')
-    expect(transformed).toContain('t("pending.action.open")')
-    expect(transformed).toContain('(0, react_jsx_runtime.jsx)(PendingWorktrees')
+    expect(transformed).not.toContain('t("pending.action.open")')
+    expect(transformed).toContain('open(item.sessionId)')
+    expect(transformed).toContain('worktreeRemote.dismissPending(item.id)')
+    expect(transformed).toContain('autoOpenPendingIds.has(item.id)')
+    expect(transformed).toContain('autoOpenPendingIds.add(result.value.pendingSessionId)')
+    expect(transformed).toContain('projectWorktreeWorkspaces(rawWorkspaces, worktreeMappings)')
+    expect(transformed).toContain('row.worktree')
+    expect(transformed).toContain('t("session.worktree")')
+    expect(transformed).toContain('style: { display: "inline-flex", flex: "none"')
+    expect(transformed).toContain('(0, react_jsx_runtime.jsx)(PendingWorktrees, { open, t, visible: wide })')
     expect(transformed).toContain('onContextMenu: (e) =>')
     expect(transformed).toContain('new DOMRect(e.clientX, e.clientY, 0, 0)')
     expect(transformed).toContain('getAnchorRect: contextMenuPoint === null ? void 0')

@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { join, relative } from 'node:path'
 import type { WorktreeEnvironment } from './types.ts'
+import type { LocalWorktreeManager } from './git/manager.ts'
 import type {
   ContinueInChatRequest,
   ContinueInChatResult,
@@ -24,6 +26,14 @@ export interface RetryPendingRequest {
   readonly id: string
   /** Replacement setup environment; omission keeps the preceding selection. */
   readonly environment?: WorktreeEnvironment
+}
+
+/** Browser projection from an internal Worktree Workspace to its source project. */
+export interface WorktreeWorkspaceMapping {
+  /** Workspace path selected by the source Session. */
+  readonly sourceWorkspacePath: string
+  /** Workspace path inside the managed Worktree. */
+  readonly worktreeWorkspacePath: string
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -91,6 +101,19 @@ export class WorktreeRemote extends TypertRemoteService {
     return this.continuation.listPending()
   }
 
+  /** List durable mappings used to present Worktree Sessions under their source project. */
+  async listWorkspaceMappings(): Promise<readonly WorktreeWorkspaceMapping[]> {
+    return (await this.worktrees.list()).map(worktree => {
+      const relativeCwd = relative(worktree.path, worktree.cwd)
+      return {
+        sourceWorkspacePath: relativeCwd === ''
+          ? worktree.repositoryRoot
+          : join(worktree.repositoryRoot, relativeCwd),
+        worktreeWorkspacePath: worktree.cwd,
+      }
+    })
+  }
+
   /** Retry one failed pending operation. */
   retryPending(request: RetryPendingRequest): void {
     const input = record(request, 'retry request')
@@ -114,5 +137,9 @@ export class WorktreeRemote extends TypertRemoteService {
 
   private get continuation(): SessionContinuation {
     return (this.ctx as Context & { sessionContinuation: SessionContinuation }).sessionContinuation
+  }
+
+  private get worktrees(): LocalWorktreeManager {
+    return (this.ctx as Context & { worktrees: LocalWorktreeManager }).worktrees
   }
 }

@@ -15,6 +15,47 @@ function replaceOnce(source, expected, replacement, label) {
   return `${source.slice(0, first)}${replacement}${source.slice(first + expected.length)}`
 }
 
+/** Fold internal managed-Worktree Workspace rows into their original project row. */
+export function projectWorktreeWorkspaces(workspaces, mappings) {
+  const workspaceByPath = new Map(workspaces.map(workspace => [workspace.path, workspace]))
+  const mappingByWorktreePath = new Map(mappings.map(mapping => [mapping.worktreeWorkspacePath, mapping]))
+  const hiddenWorkspaceIds = new Set()
+  const mergedBySourceId = new Map()
+
+  for (const mapping of mappings) {
+    const worktreeWorkspace = workspaceByPath.get(mapping.worktreeWorkspacePath)
+    if (worktreeWorkspace === undefined) continue
+    let sourcePath = mapping.sourceWorkspacePath
+    const visited = new Set([mapping.worktreeWorkspacePath])
+    while (mappingByWorktreePath.has(sourcePath) && !visited.has(sourcePath)) {
+      visited.add(sourcePath)
+      sourcePath = mappingByWorktreePath.get(sourcePath).sourceWorkspacePath
+    }
+    const sourceWorkspace = workspaceByPath.get(sourcePath)
+    if (sourceWorkspace === undefined || sourceWorkspace.workspaceId === worktreeWorkspace.workspaceId) continue
+    hiddenWorkspaceIds.add(worktreeWorkspace.workspaceId)
+    const merged = mergedBySourceId.get(sourceWorkspace.workspaceId) ?? {
+      sessionIds: new Set(sourceWorkspace.sessionIds),
+      worktreeSessionIds: new Set(),
+    }
+    for (const sessionId of worktreeWorkspace.sessionIds) {
+      merged.sessionIds.add(sessionId)
+      merged.worktreeSessionIds.add(sessionId)
+    }
+    mergedBySourceId.set(sourceWorkspace.workspaceId, merged)
+  }
+
+  return workspaces.flatMap(workspace => {
+    if (hiddenWorkspaceIds.has(workspace.workspaceId)) return []
+    const merged = mergedBySourceId.get(workspace.workspaceId)
+    return merged === undefined ? [workspace] : [{
+      ...workspace,
+      sessionIds: [...merged.sessionIds],
+      worktreeSessionIds: [...merged.worktreeSessionIds],
+    }]
+  })
+}
+
 export function transformWorkspaceClient(source, remoteBundle) {
   const digest = createHash('sha256').update(source).digest('hex')
   if (digest !== OFFICIAL_SHA256) {
@@ -38,6 +79,25 @@ export function transformWorkspaceClient(source, remoteBundle) {
     '\t\tlet continueInNewWorktree;\n',
     `\t\tlet continueInNewWorktree;
 \t\tlet worktreeRemote;
+\t\tconst autoOpenPendingIds = new Set();
+\t\tlet currentWorktreeMappings = [];
+\t\tconst worktreeMappingListeners = new Set();
+\t\t${projectWorktreeWorkspaces.toString()}
+\t\tfunction subscribeWorktreeMappings(listener) {
+\t\t\tworktreeMappingListeners.add(listener);
+\t\t\treturn () => { worktreeMappingListeners.delete(listener); };
+\t\t}
+\t\tfunction refreshWorktreeMappings() {
+\t\t\tif (worktreeRemote === void 0) return Promise.resolve();
+\t\t\treturn worktreeRemote.listWorkspaceMappings().then((result) => {
+\t\t\t\tif (!result.ok) throw new Error(result.error.message);
+\t\t\t\tcurrentWorktreeMappings = result.value;
+\t\t\t\tfor (const listener of worktreeMappingListeners) listener();
+\t\t\t});
+\t\t}
+\t\tfunction useWorktreeMappings() {
+\t\t\treturn (0, react.useSyncExternalStore)(subscribeWorktreeMappings, () => currentWorktreeMappings);
+\t\t}
 \t\tconst PENDING_ACTIVE_STAGES = new Set(["queued", "creating", "setting-up", "worktree-ready"]);
 \t\tconst PENDING_STYLE = {
 \t\t\tlist: { display: "grid", gap: "8px", padding: "8px 12px", overflow: "auto", maxHeight: "40vh" },
@@ -48,8 +108,9 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\t\toutput: { margin: 0, padding: "8px", maxHeight: "120px", overflow: "auto", whiteSpace: "pre-wrap", background: "rgba(127,127,127,.1)", borderRadius: "6px" },
 \t\t\tactions: { display: "flex", gap: "6px", flexWrap: "wrap" }
 \t\t};
-\t\tfunction PendingWorktrees({ open, t }) {
+\t\tfunction PendingWorktrees({ open, t, visible }) {
 \t\t\tconst [items, setItems] = (0, react.useState)([]);
+\t\t\tconst opened = (0, react.useRef)(new Set());
 \t\t\tconst refresh = (0, react.useCallback)(() => {
 \t\t\t\tif (worktreeRemote === void 0) return Promise.resolve();
 \t\t\t\treturn worktreeRemote.listPending().then((result) => {
@@ -66,7 +127,21 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\t\t\tconst timer = window.setInterval(poll, 500);
 \t\t\t\treturn () => { disposed = true; window.clearInterval(timer); };
 \t\t\t}, [refresh]);
-\t\t\tif (items.length === 0) return null;
+\t\t\t(0, react.useEffect)(() => {
+\t\t\t\tfor (const item of items) {
+\t\t\t\t\tif (item.stage !== "published" || item.sessionId === void 0 || !autoOpenPendingIds.has(item.id) || opened.current.has(item.id)) continue;
+\t\t\t\t\topened.current.add(item.id);
+\t\t\t\t\tautoOpenPendingIds.delete(item.id);
+\t\t\t\t\trefreshWorktreeMappings().then(() => {
+\t\t\t\t\t\topen(item.sessionId);
+\t\t\t\t\t\treturn worktreeRemote.dismissPending(item.id);
+\t\t\t\t\t}).then((result) => {
+\t\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);
+\t\t\t\t\t\treturn refresh();
+\t\t\t\t\t}).catch((reason) => { console.warn("published Worktree open rejected:", reason); });
+\t\t\t\t}
+\t\t\t}, [items, open, refresh]);
+\t\t\tif (!visible || items.length === 0) return null;
 \t\t\tconst run = (action) => {
 \t\t\t\tif (worktreeRemote === void 0) return;
 \t\t\t\tPromise.resolve(action()).then((result) => {
@@ -87,7 +162,6 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\t\t\t\t\tactions.push((0, react_jsx_runtime.jsx)("button", { type: "button", onClick: () => { run(() => worktreeRemote.dismissPending(item.id)); }, children: t("pending.action.dismiss") }, "dismiss"));
 \t\t\t\t\t}
 \t\t\t\t\tif (item.stage === "cancelled") actions.push((0, react_jsx_runtime.jsx)("button", { type: "button", onClick: () => { run(() => worktreeRemote.dismissPending(item.id)); }, children: t("pending.action.dismiss") }, "dismiss"));
-\t\t\t\t\tif (item.stage === "published" && item.sessionId !== void 0) actions.push((0, react_jsx_runtime.jsx)("button", { type: "button", onClick: () => { open(item.sessionId); run(() => worktreeRemote.dismissPending(item.id)); }, children: t("pending.action.open") }, "open"));
 \t\t\t\t\treturn (0, react_jsx_runtime.jsxs)("section", {
 \t\t\t\t\t\tstyle: PENDING_STYLE.card,
 \t\t\t\t\t\tchildren: [
@@ -118,6 +192,54 @@ export function transformWorkspaceClient(source, remoteBundle) {
   )
   output = replaceOnce(
     output,
+    '\t\t\tconst workspaces = useWorkspaces((state) => state.items);',
+    '\t\t\tconst rawWorkspaces = useWorkspaces((state) => state.items);\n\t\t\tconst worktreeMappings = useWorktreeMappings();\n\t\t\tconst workspaces = (0, react.useMemo)(() => projectWorktreeWorkspaces(rawWorkspaces, worktreeMappings), [rawWorkspaces, worktreeMappings]);',
+    'Workspace Worktree projection',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\tconst members = [];\n\t\t\t\tfor (const id of workspace.sessionIds) {',
+    '\t\t\t\tconst members = [];\n\t\t\t\tconst worktreeSessionIds = new Set(workspace.worktreeSessionIds ?? []);\n\t\t\t\tfor (const id of workspace.sessionIds) {',
+    'group Worktree identity set',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\t\tmembers.push(summary);',
+    '\t\t\t\t\tmembers.push(worktreeSessionIds.has(id) ? { ...summary, worktree: true } : summary);',
+    'group Worktree Session marker',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\tcompleted: s.completed === true,\n\t\t\t\tupdatedAt: s.updatedAt,',
+    '\t\t\t\tcompleted: s.completed === true,\n\t\t\t\tworktree: s.worktree === true,\n\t\t\t\tupdatedAt: s.updatedAt,',
+    'derived Worktree Session marker',
+  )
+  output = replaceOnce(
+    output,
+    '\t\tfunction deriveFlat(list, archivedSessionIds) {\n\t\t\tconst archived = new Set(archivedSessionIds);\n\t\t\tconst descendants = (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(list.byId);',
+    '\t\tfunction deriveFlat(list, archivedSessionIds, workspaces) {\n\t\t\tconst archived = new Set(archivedSessionIds);\n\t\t\tconst descendants = (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(list.byId);\n\t\t\tconst worktreeSessionIds = new Set(workspaces.flatMap((workspace) => workspace.worktreeSessionIds ?? []));',
+    'flat Worktree Session identity',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\trows.push(s);\n\t\t\t}\n\t\t\trows.sort(byRecency);',
+    '\t\t\t\trows.push(worktreeSessionIds.has(id) ? { ...s, worktree: true } : s);\n\t\t\t}\n\t\t\trows.sort(byRecency);',
+    'flat Worktree Session marker',
+  )
+  output = replaceOnce(
+    output,
+    '\t\tfunction FlatList({ useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {\n\t\t\tconst list = useSessions((s) => s);\n\t\t\tconst baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds), [list, archivedSessionIds]);',
+    '\t\tfunction FlatList({ useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, workspaces, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {\n\t\t\tconst list = useSessions((s) => s);\n\t\t\tconst baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds, workspaces), [list, archivedSessionIds, workspaces]);',
+    'flat Worktree projection input',
+  )
+  output = replaceOnce(
+    output,
+    '\t\t\t\t\t\t\tarchivedSessionIds,\n\t\t\t\t\t\t\torderBy,',
+    '\t\t\t\t\t\t\tarchivedSessionIds,\n\t\t\t\t\t\t\tworkspaces,\n\t\t\t\t\t\t\torderBy,',
+    'flat Worktree Workspace prop',
+  )
+  output = replaceOnce(
+    output,
     `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},`,
     `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},
 \t\t\t\t\tonContextMenu: (e) => {
@@ -140,6 +262,24 @@ export function transformWorkspaceClient(source, remoteBundle) {
     '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
     '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetContextMenuPoint(null);\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
     'Session overflow anchor reset',
+  )
+  output = replaceOnce(
+    output,
+    `\t\t\t\t\t\t(0, react_jsx_runtime.jsx)("span", {
+\t\t\t\t\t\t\tclassName: Rows_module_css_default.title,
+\t\t\t\t\t\t\tchildren: title
+\t\t\t\t\t\t}),`,
+    `\t\t\t\t\t\t(0, react_jsx_runtime.jsx)("span", {
+\t\t\t\t\t\t\tclassName: Rows_module_css_default.title,
+\t\t\t\t\t\t\tchildren: title
+\t\t\t\t\t\t}),
+\t\t\t\t\t\trow.worktree && (0, react_jsx_runtime.jsx)("span", {
+\t\t\t\t\t\t\t"aria-label": t("session.worktree"),
+\t\t\t\t\t\t\ttitle: t("session.worktree"),
+\t\t\t\t\t\t\tstyle: { display: "inline-flex", flex: "none", marginInlineEnd: "6px", opacity: .65 },
+\t\t\t\t\t\t\tchildren: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, { size: 13 })
+\t\t\t\t\t\t}),`,
+    'Worktree Session indicator',
   )
   output = replaceOnce(
     output,
@@ -170,7 +310,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\t\t"pending.action.retry": "重试",
 \t\t\t"pending.action.continueWithoutSetup": "忽略初始化错误并继续",
 \t\t\t"pending.action.dismiss": "关闭",
-\t\t\t"pending.action.open": "打开",`,
+\t\t\t"session.worktree": "工作树会话",`,
     'Chinese pending labels',
   )
   output = replaceOnce(
@@ -196,26 +336,26 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\t\t"pending.action.retry": "Retry",
 \t\t\t"pending.action.continueWithoutSetup": "Continue without setup",
 \t\t\t"pending.action.dismiss": "Dismiss",
-\t\t\t"pending.action.open": "Open",`,
+\t\t\t"session.worktree": "Worktree session",`,
     'English pending labels',
   )
   output = replaceOnce(
     output,
     '\t\t\t\t\t!wide && (0, react_jsx_runtime.jsx)("div", {',
-    `\t\t\t\t\twide && (0, react_jsx_runtime.jsx)(PendingWorktrees, { open, t }),
+    `\t\t\t\t\t(0, react_jsx_runtime.jsx)(PendingWorktrees, { open, t, visible: wide }),
 \t\t\t\t\t!wide && (0, react_jsx_runtime.jsx)("div", {`,
     'pending Worktree panel',
   )
   output = replaceOnce(
     output,
     '\t\tfunction apply(ctx) {\n',
-    `\t\tasync function apply(ctx) {\n\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tcontinueInNewChat = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInChat({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tctx.sessions.open(result.value.sessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new chat rejected:", reason); });\n\t\t\t};\n\t\t\tcontinueInNewWorktree = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });\n\t\t\t};\n`,
+    `\t\tasync function apply(ctx) {\n\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tcontinueInNewChat = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInChat({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tctx.sessions.open(result.value.sessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new chat rejected:", reason); });\n\t\t\t};\n\t\t\tcontinueInNewWorktree = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tautoOpenPendingIds.add(result.value.pendingSessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });\n\t\t\t};\n`,
     'apply declaration',
   )
   output = replaceOnce(
     output,
     '\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n',
-    '\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tworktreeRemote = ctx.get("remote.dshWorktree");\n\t\t\tif (worktreeRemote === void 0) throw new Error("dsh-worktree Remote namespace did not mount");\n',
+    '\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tworktreeRemote = ctx.get("remote.dshWorktree");\n\t\t\tif (worktreeRemote === void 0) throw new Error("dsh-worktree Remote namespace did not mount");\n\t\t\tawait refreshWorktreeMappings();\n',
     'mounted Remote lookup',
   )
   output = replaceOnce(
@@ -233,7 +373,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t}`,
-    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t\treturn async () => {\n\t\t\t\tcontinueInNewChat = void 0;\n\t\t\t\tcontinueInNewWorktree = void 0;\n\t\t\t\tworktreeRemote = void 0;\n\t\t\t\tawait disposeWorktreeRemote();\n\t\t\t};\n\t\t}`,
+    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t\treturn async () => {\n\t\t\t\tcontinueInNewChat = void 0;\n\t\t\t\tcontinueInNewWorktree = void 0;\n\t\t\t\tautoOpenPendingIds.clear();\n\t\t\t\tcurrentWorktreeMappings = [];\n\t\t\t\tworktreeMappingListeners.clear();\n\t\t\t\tworktreeRemote = void 0;\n\t\t\t\tawait disposeWorktreeRemote();\n\t\t\t};\n\t\t}`,
     'apply tail',
   )
   output = replaceOnce(

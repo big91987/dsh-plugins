@@ -40,6 +40,10 @@ const Pending = z.object({
   error: z.string().optional(),
   failureKind: z.enum(['worktree', 'setup', 'publication']).optional(),
 })
+const WorkspaceMapping = z.object({
+  sourceWorkspacePath: Id,
+  worktreeWorkspacePath: Id,
+})
 
 const strictCodec = (typeSymbol: string, schema: z.ZodType) => ({
   mode: 'strict' as const,
@@ -90,6 +94,11 @@ export const TYPERT_REMOTE = {
       strictCodec('dsh-worktree#NullablePendingSessionSnapshot', Pending.nullable()),
     ),
     descriptor('listPending', [], strictCodec('dsh-worktree#PendingSessionSnapshotList', z.array(Pending))),
+    descriptor(
+      'listWorkspaceMappings',
+      [],
+      strictCodec('dsh-worktree#WorktreeWorkspaceMappingList', z.array(WorkspaceMapping)),
+    ),
     descriptor(
       'retryPending',
       [jsonParameter('request', 'dsh-worktree#RetryPendingRequest', RetryRequest)],

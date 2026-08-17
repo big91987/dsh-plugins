@@ -29,7 +29,15 @@ describe('WorktreeRemote', () => {
       continuePendingWithoutSetup: vi.fn(),
       dismissPending: vi.fn(),
     }
+    const worktrees = {
+      list: vi.fn(() => Promise.resolve([{
+        path: '/managed/abcd/project',
+        cwd: '/managed/abcd/project/packages/app',
+        repositoryRoot: '/source/project',
+      }])),
+    }
     ctx.provide('sessionContinuation', continuation as never)
+    ctx.provide('worktrees', worktrees as never)
     const remote = new WorktreeRemote(ctx)
     const signal = new AbortController().signal
 
@@ -39,6 +47,10 @@ describe('WorktreeRemote', () => {
       .toEqual({ pendingSessionId: 'pending-1' })
     expect(remote.pending('missing')).toBeNull()
     expect(remote.listPending()).toEqual([])
+    await expect(remote.listWorkspaceMappings()).resolves.toEqual([{
+      sourceWorkspacePath: '/source/project/packages/app',
+      worktreeWorkspacePath: '/managed/abcd/project/packages/app',
+    }])
     remote.retryPending({ id: 'pending-1' })
     await remote.cancelPending('pending-1')
     remote.continuePendingWithoutSetup('pending-1')
@@ -46,5 +58,6 @@ describe('WorktreeRemote', () => {
 
     expect(continuation.continueInChat).toHaveBeenCalledWith({ sourceSessionId: 'source', signal })
     expect(continuation.retryPending).toHaveBeenCalledWith('pending-1', undefined)
+    expect(worktrees.list).toHaveBeenCalledOnce()
   })
 })
