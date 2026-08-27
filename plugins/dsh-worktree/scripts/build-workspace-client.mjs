@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const OFFICIAL_SHA256 = '7579ea4578750df71309dcf4881cf588aced13cf8137273a2c308a29bceb6464'
+const OFFICIAL_SHA256 = '75d8a09a43a820e0ff8470e7b9c87b6dced523764ee650a8382317f6ef7a314b'
 
 function replaceOnce(source, expected, replacement, label) {
   const first = source.indexOf(expected)
@@ -71,7 +71,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     '\t\tvar exports = module.exports;\n',
-    `\t\tvar exports = module.exports;\n${remoteBundle}\n\t\tconst DSH_WORKTREE_REMOTE = DSHWorktreeRemoteBundle.default ?? DSHWorktreeRemoteBundle;\n\t\tlet continueInNewChat;\n\t\tlet continueInNewWorktree;\n`,
+    `\t\tvar exports = module.exports;\n${remoteBundle}\n\t\tconst DSH_WORKTREE_REMOTE = DSHWorktreeRemoteBundle.default ?? DSHWorktreeRemoteBundle;\n\t\tlet continueInNewWorktree;\n`,
     'module prelude',
   )
   output = replaceOnce(
@@ -181,7 +181,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     `\t\t\t\t{\n\t\t\t\t\tid: "fork",\n\t\t\t\t\tlabel: t("menu.fork"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},`,
-    `\t\t\t\t{\n\t\t\t\t\tid: "continue-chat",\n\t\t\t\t\tlabel: t("menu.continueChat"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\tid: "continue-worktree",\n\t\t\t\t\tlabel: t("menu.continueWorktree"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderClose16, {})\n\t\t\t\t},`,
+    `\t\t\t\t{\n\t\t\t\t\tid: "fork",\n\t\t\t\t\tlabel: t("menu.fork"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\tid: "continue-worktree",\n\t\t\t\t\tlabel: t("menu.continueWorktree"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderClose16, {})\n\t\t\t\t},`,
     'Fork menu item',
   )
   output = replaceOnce(
@@ -284,13 +284,13 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     '\t\t\t\t\t\t\t\t\tif (id === "fork") onFork(node.id);',
-    '\t\t\t\t\t\t\t\t\tif (id === "continue-chat") continueInNewChat?.(node.id);\n\t\t\t\t\t\t\t\t\tif (id === "continue-worktree") continueInNewWorktree?.(node.id);',
+    '\t\t\t\t\t\t\t\t\tif (id === "fork") onFork(node.id);\n\t\t\t\t\t\t\t\t\tif (id === "continue-worktree") continueInNewWorktree?.(node.id);',
     'Fork menu handler',
   )
   output = replaceOnce(
     output,
     '\t\t\t"menu.fork": "分叉会话",',
-    '\t\t\t"menu.continueChat": "在新聊天中继续",\n\t\t\t"menu.continueWorktree": "在新工作树中继续",',
+    '\t\t\t"menu.fork": "分叉会话",\n\t\t\t"menu.continueWorktree": "在新工作树中继续",',
     'Chinese Fork label',
   )
   output = replaceOnce(
@@ -316,7 +316,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     '\t\t\t"menu.fork": "Fork session",',
-    '\t\t\t"menu.continueChat": "Continue in new chat",\n\t\t\t"menu.continueWorktree": "Continue in new worktree",',
+    '\t\t\t"menu.fork": "Fork session",\n\t\t\t"menu.continueWorktree": "Continue in new worktree",',
     'English Fork label',
   )
   output = replaceOnce(
@@ -349,7 +349,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     '\t\tfunction apply(ctx) {\n',
-    `\t\tasync function apply(ctx) {\n\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tcontinueInNewChat = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInChat({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tctx.sessions.open(result.value.sessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new chat rejected:", reason); });\n\t\t\t};\n\t\t\tcontinueInNewWorktree = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tautoOpenPendingIds.add(result.value.pendingSessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });\n\t\t\t};\n`,
+    `\t\tasync function apply(ctx) {\n\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tcontinueInNewWorktree = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tautoOpenPendingIds.add(result.value.pendingSessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });\n\t\t\t};\n`,
     'apply declaration',
   )
   output = replaceOnce(
@@ -360,12 +360,6 @@ export function transformWorkspaceClient(source, remoteBundle) {
   )
   output = replaceOnce(
     output,
-    'ctx.remote.dshWorktree.continueInChat',
-    'worktreeRemote.continueInChat',
-    'new-chat Remote call',
-  )
-  output = replaceOnce(
-    output,
     'ctx.remote.dshWorktree.continueInWorktree',
     'worktreeRemote.continueInWorktree',
     'Worktree Remote call',
@@ -373,7 +367,7 @@ export function transformWorkspaceClient(source, remoteBundle) {
   output = replaceOnce(
     output,
     `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t}`,
-    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t\treturn async () => {\n\t\t\t\tcontinueInNewChat = void 0;\n\t\t\t\tcontinueInNewWorktree = void 0;\n\t\t\t\tautoOpenPendingIds.clear();\n\t\t\t\tcurrentWorktreeMappings = [];\n\t\t\t\tworktreeMappingListeners.clear();\n\t\t\t\tworktreeRemote = void 0;\n\t\t\t\tawait disposeWorktreeRemote();\n\t\t\t};\n\t\t}`,
+    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t\treturn async () => {\n\t\t\t\tcontinueInNewWorktree = void 0;\n\t\t\t\tautoOpenPendingIds.clear();\n\t\t\t\tcurrentWorktreeMappings = [];\n\t\t\t\tworktreeMappingListeners.clear();\n\t\t\t\tworktreeRemote = void 0;\n\t\t\t\tawait disposeWorktreeRemote();\n\t\t\t};\n\t\t}`,
     'apply tail',
   )
   output = replaceOnce(

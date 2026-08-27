@@ -16,7 +16,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CommandDefinition, CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage, BlockAssembler, LlmError } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, FinishReason, Message } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { findImageSpans, expandToBalancedSpan } from './spans.ts'
@@ -35,6 +35,46 @@ const CHECKPOINT_INSTRUCTION = [
 /** Preamble marking the replacement as established context. */
 const CHECKPOINT_PREAMBLE =
   'This is a text checkpoint replacing an earlier conversation span that contained images. Treat it as established background and continue without restating it.'
+
+/**
+ * Return the visible checkpoint text from a completed summary stream.
+ * Terminal provider failures take precedence over the empty-output fallback.
+ */
+export function summarizationText(assembler: BlockAssembler): string {
+  const finishError = summarizationFinishError(assembler.finish)
+  if (finishError !== undefined) throw finishError
+
+  const text = assembler.blocks()
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .map(block => block.text)
+    .join('\n')
+    .trim()
+  if (text.length === 0) {
+    throw new Error('image summarization produced no text content')
+  }
+  return text
+}
+
+/** Map a terminal summary finish to the provider-owned failure. */
+function summarizationFinishError(finish: FinishReason): Error | undefined {
+  switch (finish.kind) {
+    case 'error':
+    case 'aborted': {
+      const error = new Error(finish.failure.message) as Error & { code?: string }
+      error.code = finish.failure.code
+      return error
+    }
+    case 'max-tokens': {
+      const error = new Error(
+        'image summarization truncated at the token cap (incomplete checkpoint)',
+      ) as Error & { code?: string }
+      error.code = 'MAX_TOKENS'
+      return error
+    }
+    default:
+      return undefined
+  }
+}
 
 /**
  * Replay the shadowed span's messages (images included) plus the instruction
@@ -81,14 +121,7 @@ async function describeSpan(
   })) {
     assembler.push(chunk)
   }
-  const text = assembler.blocks()
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join('\n')
-    .trim()
-  if (text.length === 0) {
-    throw new Error('image summarization produced no text content')
-  }
+  const text = summarizationText(assembler)
   return { text, provider: target.provider, model: target.model }
 }
 

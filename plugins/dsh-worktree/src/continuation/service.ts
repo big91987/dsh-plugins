@@ -54,25 +54,19 @@ export interface ContinuationHost {
       readonly meta: Readonly<Record<string, unknown>>
       readonly signal?: AbortSignal
       readonly setup: (agentContext: unknown) => Promise<unknown>
-    }): Promise<unknown>
+    }): Promise<{ readonly agent: { readonly session: unknown } }>
+    get(sessionId: string): { readonly session: unknown } | undefined
   }
   readonly agentPresets: {
     mount(agentContext: unknown, presetId?: string): Promise<unknown>
+  }
+  readonly sessionTitle: {
+    rename(session: unknown, title: string): unknown
   }
   readonly workspaceRegistry: {
     list(): readonly ContinuationWorkspace[]
     create(cwd: string): Promise<ContinuationWorkspace>
   }
-}
-
-export interface ContinueInChatRequest {
-  readonly sourceSessionId: string
-  readonly atSeq?: number
-  readonly signal?: AbortSignal
-}
-
-export interface ContinueInChatResult {
-  readonly sessionId: string
 }
 
 export interface ContinueInWorktreeRequest {
@@ -116,6 +110,26 @@ function resolveSessionPreset(
   return header.agentPreset
 }
 
+function resolveSessionTitle(events: readonly ContinuationEvent[]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index]
+    if (event?.type !== 'session/title' || typeof event.data !== 'object' || event.data === null) continue
+    const title = (event.data as Record<string, unknown>).title
+    if (typeof title === 'string' && title !== '') return title
+  }
+  return undefined
+}
+
+function increasedForkTitle(title: string): string {
+  const ascii = /^(.*?)\((\d+)\)$/u.exec(title)
+  if (ascii?.[1] !== undefined && ascii[2] !== undefined) return `${ascii[1]}(${BigInt(ascii[2]) + 1n})`
+  const fullWidth = /^(.*?)（(\d+)）$/u.exec(title)
+  if (fullWidth?.[1] !== undefined && fullWidth[2] !== undefined) {
+    return `${fullWidth[1]}（${BigInt(fullWidth[2]) + 1n}）`
+  }
+  return `${title} (1)`
+}
+
 async function continuationWorkspace(
   host: ContinuationHost,
   header: ContinuationSessionHeader,
@@ -152,10 +166,10 @@ export class SessionContinuation {
     seed: readonly ContinuationEvent[],
     cwd: string | undefined,
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<{ readonly id: string; readonly session: unknown }> {
     const presetId = resolveSessionPreset(header, events)
     const childId = `session-${randomUUID()}`
-    await this.host.agents.create({
+    const handle = await this.host.agents.create({
       sessionId: childId,
       seed,
       meta: {
@@ -167,31 +181,7 @@ export class SessionContinuation {
       ...(signal === undefined ? {} : { signal }),
       setup: async agentContext => { await this.host.agentPresets.mount(agentContext, presetId) },
     })
-    return childId
-  }
-
-  async continueInChat(request: ContinueInChatRequest): Promise<ContinueInChatResult> {
-    request.signal?.throwIfAborted()
-    const source = await this.host.sessionQuery.readSession(request.sourceSessionId)
-    request.signal?.throwIfAborted()
-    const seed = completedHistory(source.session.id, source.events, request.atSeq)
-    const workspace = await continuationWorkspace(this.host, source.session)
-    request.signal?.throwIfAborted()
-    const childId = await this.createChild(
-      source.session,
-      source.events,
-      seed,
-      source.session.cwd,
-      request.signal,
-    )
-    if (workspace !== undefined) {
-      try {
-        await workspace.attachSession(childId)
-      } catch (error) {
-        throw new ContinuationWorkspaceAttachError(childId, workspace.id, error)
-      }
-    }
-    return { sessionId: childId }
+    return { id: childId, session: handle.agent.session }
   }
 
   continueInWorktree(request: ContinueInWorktreeRequest): ContinueInWorktreeResult {
@@ -394,14 +384,21 @@ export class SessionContinuation {
     if (prepared === undefined || worktree === undefined || this.worktrees === undefined) {
       throw new Error(`pending Session ${record.id} is missing publication state`)
     }
-    const childId = record.sessionId ?? await this.createChild(
-      prepared.header,
-      prepared.events,
-      prepared.seed,
-      worktree.cwd,
-      signal,
-    )
+    const created = record.sessionId === undefined
+      ? await this.createChild(prepared.header, prepared.events, prepared.seed, worktree.cwd, signal)
+      : undefined
+    const childId = created?.id ?? record.sessionId
+    if (childId === undefined) throw new Error(`pending Session ${record.id} has no child identity`)
     record.sessionId = childId
+    if (record.titleAssigned !== true) {
+      const title = resolveSessionTitle(prepared.events)
+      if (title !== undefined) {
+        const session = created?.session ?? this.host.agents.get(childId)?.session
+        if (session === undefined) throw new Error(`pending Session ${record.id} child is not live`)
+        this.host.sessionTitle.rename(session, increasedForkTitle(title))
+      }
+      record.titleAssigned = true
+    }
     if (record.workspaceAttached !== true) {
       const workspace = await this.host.workspaceRegistry.create(worktree.cwd)
       try {

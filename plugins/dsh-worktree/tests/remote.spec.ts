@@ -4,7 +4,8 @@ import { WorktreeRemote } from '../src/remote.ts'
 import { TYPERT } from '../src/typert.ts'
 
 describe('WorktreeRemote', () => {
-  it('publishes only zod-backed strict codecs accepted by the rc.6 loader', () => {
+  it('publishes only zod-backed strict codecs accepted by the 0.1.1-rc.2 loader', () => {
+    expect(TYPERT.invocations.map(invocation => invocation.method)).not.toContain('continueInChat')
     for (const invocation of TYPERT.invocations) {
       for (const parameter of invocation.parameters) {
         expect(parameter.codec.mode).toBe('strict')
@@ -20,7 +21,6 @@ describe('WorktreeRemote', () => {
   it('delegates browser operations to the scoped Session continuation service', async () => {
     const ctx = new Context()
     const continuation = {
-      continueInChat: vi.fn(() => Promise.resolve({ sessionId: 'child-session' })),
       continueInWorktree: vi.fn(() => ({ pendingSessionId: 'pending-1' })),
       pending: vi.fn(() => undefined),
       listPending: vi.fn(() => []),
@@ -39,10 +39,7 @@ describe('WorktreeRemote', () => {
     ctx.provide('sessionContinuation', continuation as never)
     ctx.provide('worktrees', worktrees as never)
     const remote = new WorktreeRemote(ctx)
-    const signal = new AbortController().signal
 
-    await expect(remote.continueInChat({ sourceSessionId: 'source' }, signal))
-      .resolves.toEqual({ sessionId: 'child-session' })
     expect(remote.continueInWorktree({ sourceSessionId: 'source' }))
       .toEqual({ pendingSessionId: 'pending-1' })
     expect(remote.pending('missing')).toBeNull()
@@ -56,7 +53,7 @@ describe('WorktreeRemote', () => {
     remote.continuePendingWithoutSetup('pending-1')
     remote.dismissPending('pending-1')
 
-    expect(continuation.continueInChat).toHaveBeenCalledWith({ sourceSessionId: 'source', signal })
+    expect(continuation.continueInWorktree).toHaveBeenCalledWith({ sourceSessionId: 'source' })
     expect(continuation.retryPending).toHaveBeenCalledWith('pending-1', undefined)
     expect(worktrees.list).toHaveBeenCalledOnce()
   })

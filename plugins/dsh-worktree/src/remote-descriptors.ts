@@ -78,12 +78,6 @@ export const TYPERT_REMOTE = {
   package: 'dsh-worktree',
   descriptors: [
     descriptor(
-      'continueInChat',
-      [jsonParameter('request', 'dsh-worktree#ContinueInChatWireRequest', ContinuationRequest)],
-      strictCodec('dsh-worktree#ContinueInChatResult', z.object({ sessionId: Id })),
-      true,
-    ),
-    descriptor(
       'continueInWorktree',
       [jsonParameter('request', 'dsh-worktree#ContinueInWorktreeRequest', WorktreeContinuationRequest)],
       strictCodec('dsh-worktree#ContinueInWorktreeResult', z.object({ pendingSessionId: Id })),

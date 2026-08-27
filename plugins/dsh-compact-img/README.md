@@ -17,10 +17,9 @@ image, ...), the host refuses to switch the session to a text-only model
    block (including images nested inside `tool/result` content).
 2. Groups them into contiguous spans and expands each span to
    tool-pairing-balanced boundaries.
-3. Compacts each span through the host compaction backend
-   (`compactSurfaceRegion`, the same transaction `/compact` uses) with a
-   multi-modal summarizer — the session's current routed model — so the images
-   are *seen* and condensed into a text checkpoint.
+3. Replays each span through the session's current routed multi-modal model so
+   the images are *seen* and condensed into a text checkpoint, then records the
+   replacement with the Host's durable compaction event vocabulary.
 4. The replacement checkpoint contains text only; the surface no longer has
    image blocks, so the model-switch gate now passes for a text-only model.
 
@@ -39,14 +38,13 @@ Run it while the session is idle and while the session model is multi-modal
 pnpm install
 pnpm build
 
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-compact-img
+pnpm dlx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
 ```
 
 ## Requirements
 
-- Host: DeepSeek Harness `@deepseek-ai/dsh@0.1.0-rc.6` (or compatible), with
-  the `dsh-compaction-basic`, `dsh-token-meter`, and `dsh-commands` plugins
-  mounted (they are part of the `base` bundle).
+- Host: DeepSeek Harness `@deepseek-ai/dsh@0.1.1-rc.2`, with the
+  `dsh-commands` plugin mounted (it is part of the `base` bundle).
 - The session's current model must accept image input for the summarization
   step to see the images.
 
@@ -58,3 +56,14 @@ pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-comp
   session is currently using). If that model cannot see images, the compaction
   fails with an `UNSUPPORTED_CONTENT` error rather than silently dropping the
   images.
+- Provider failures such as `AUTH`, `QUOTA`, cancellation, and token-cap
+  truncation are surfaced before the empty-text fallback.
+
+## Why not only use `/compact`?
+
+The built-in `0.1.1-rc.2` compactor can replay image references through a capable
+summarization model. Its range selection is retention-driven, however: it
+reduces older history and may leave recent image-bearing nodes untouched.
+`/compact-img` is still useful when the explicit goal is to remove every image
+from the current surface before selecting a text-only model. If ordinary
+context reduction is the only goal, use the built-in `/compact` instead.

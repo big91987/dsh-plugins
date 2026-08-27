@@ -22,15 +22,13 @@ export {
 export type {
   ContinuationHost,
   ContinuationWorktrees,
-  ContinueInChatRequest,
-  ContinueInChatResult,
   ContinueInWorktreeRequest,
   ContinueInWorktreeResult,
 } from './continuation/service.ts'
 export { completedHistory, ContinuationUnavailableError } from './continuation/history.ts'
 export type { PendingSessionOutput, PendingSessionSnapshot, PendingSessionStage } from './continuation/pending.ts'
 export { WorktreeRemote } from './remote.ts'
-export type { ContinueInChatWireRequest, RetryPendingRequest, WorktreeWorkspaceMapping } from './remote.ts'
+export type { RetryPendingRequest, WorktreeWorkspaceMapping } from './remote.ts'
 export type {
   CreateWorktreeRequest,
   DeleteWorktreeRequest,
@@ -60,7 +58,7 @@ export function apply(ctx: Context, config: LocalWorktreeConfig): void {
   const manager = new LocalWorktreeManager(config, services.subprocess)
   ctx.provide('worktrees', manager)
   ctx.effect(() => async () => { await manager.dispose() })
-  ctx.inject(['agents', 'sessionQuery', 'agentPresets', 'workspaceRegistry'], continuationContext => {
+  ctx.inject(['agents', 'sessionQuery', 'agentPresets', 'sessionTitle', 'workspaceRegistry'], continuationContext => {
     const continuation = new SessionContinuation(
       continuationContext as unknown as ContinuationHost,
       manager,

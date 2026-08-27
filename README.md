@@ -2,9 +2,9 @@
 
 [简体中文](README.zh-CN.md) | English
 
-Three independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.0-rc.6`:
+Three independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.1-rc.2`:
 
-- [`dsh-worktree`](plugins/dsh-worktree/README.md): Codex-style **Continue in new chat** and **Continue in new worktree** Session actions, automatic opening, same-project Worktree projection, managed Git Worktrees, and recovery UI.
+- [`dsh-worktree`](plugins/dsh-worktree/README.md): Codex-style **Continue in new worktree** alongside the official **Fork session** action, with automatic opening, same-project Worktree projection, managed Git Worktrees, and recovery UI.
 - [`dsh-session-coordination`](plugins/dsh-session-coordination/README.md): discovery, history reading, messaging, waiting, and forking across independent top-level Sessions.
 - [`dsh-compact-img`](plugins/dsh-compact-img/README.md): `/compact-img`, which replaces image-bearing history spans with text checkpoints before switching to a text-only model.
 
@@ -20,16 +20,16 @@ cd dsh-plugins
 pnpm install --frozen-lockfile
 pnpm build
 
-npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-worktree
-npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-session-coordination
-npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-compact-img
-npx @deepseek-ai/dsh@0.1.0-rc.6 web
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-worktree
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
+npx @deepseek-ai/dsh@0.1.1-rc.2 web
 ```
 
 Local profile dependencies link to this checkout, so do not move or delete it while the plugins are installed. See the [Chinese guide](README.zh-CN.md) for usage, updates, uninstall instructions, persistent-data behavior, troubleshooting, and the accepted differences from the current official extension surface.
 
 ## Compatibility
 
-The repository intentionally targets the tested `0.1.0-rc.6` Host and client contracts. `dsh-session-coordination` and `dsh-compact-img` are additive Host bundles. `dsh-worktree` additionally derives its browser contribution from the checksum-pinned official rc.6 Workspace client because that release has no public Session-row action extension point. A later DSH release requires explicit compatibility verification and likely a Worktree client update.
+The repository intentionally targets the tested `0.1.1-rc.2` Host and client contracts. `dsh-session-coordination` and `dsh-compact-img` are additive Host bundles. `dsh-worktree` additionally derives its browser contribution from the checksum-pinned official `0.1.1-rc.2` Workspace client because that release has no public Session-row action extension point. A later DSH release requires explicit compatibility verification and likely a Worktree client update.
 
 The DeepSeek Harness source checkout is reference-only. Plugin development, commits, packaging, and releases happen in this repository.

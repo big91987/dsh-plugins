@@ -4,21 +4,11 @@ import { join, relative } from 'node:path'
 import type { WorktreeEnvironment } from './types.ts'
 import type { LocalWorktreeManager } from './git/manager.ts'
 import type {
-  ContinueInChatRequest,
-  ContinueInChatResult,
   ContinueInWorktreeRequest,
   ContinueInWorktreeResult,
   SessionContinuation,
 } from './continuation/service.ts'
 import type { PendingSessionSnapshot } from './continuation/pending.ts'
-
-/** Wire request for a same-directory continuation. */
-export interface ContinueInChatWireRequest {
-  /** Durable source Session identity. */
-  readonly sourceSessionId: string
-  /** Optional source event anchor. */
-  readonly atSeq?: number
-}
 
 /** Wire request for retrying one failed pending Worktree operation. */
 export interface RetryPendingRequest {
@@ -54,7 +44,9 @@ function optionalInteger(value: unknown, label: string): number | undefined {
   return value as number
 }
 
-function continuationRequest(value: unknown): ContinueInChatWireRequest {
+function continuationRequest(
+  value: unknown,
+): Pick<ContinueInWorktreeRequest, 'sourceSessionId' | 'atSeq'> {
   const input = record(value, 'continuation request')
   const atSeq = optionalInteger(input.atSeq, 'atSeq')
   return {
@@ -73,11 +65,6 @@ function environment(value: unknown): WorktreeEnvironment | undefined {
 export class WorktreeRemote extends TypertRemoteService {
   constructor(ctx: Context) {
     super(ctx, 'dshWorktreeRemote', { namespace: 'dshWorktree' })
-  }
-
-  /** Continue a completed source prefix in a new same-directory Session. */
-  async continueInChat(request: ContinueInChatWireRequest, signal: AbortSignal): Promise<ContinueInChatResult> {
-    return this.continuation.continueInChat({ ...continuationRequest(request), signal })
   }
 
   /** Begin a managed-Worktree continuation and return immediately. */

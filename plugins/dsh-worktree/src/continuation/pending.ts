@@ -72,6 +72,7 @@ export interface PendingRecord {
     readonly seed: readonly ContinuationEvent[]
   }
   workspaceAttached?: boolean
+  titleAssigned?: boolean
   controller?: AbortController
   running?: Promise<void>
 }

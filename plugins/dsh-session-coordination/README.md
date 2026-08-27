@@ -1,6 +1,6 @@
 # dsh-session-coordination
 
-Adds five Codex-style tools for coordination across independent top-level Sessions in DeepSeek Harness `0.1.0-rc.6`:
+Adds five Codex-style tools for coordination across independent top-level Sessions in DeepSeek Harness `0.1.1-rc.2`:
 
 - `list_threads`
 - `read_thread`
@@ -14,10 +14,10 @@ Adds five Codex-style tools for coordination across independent top-level Sessio
 
 ```sh
 pnpm --filter dsh-session-coordination build
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add ./plugins/dsh-session-coordination
+pnpm dlx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
 ```
 
-Compatibility is intentionally limited to the tested `0.1.0-rc.6` Host contract.
+Compatibility is intentionally limited to the tested `0.1.1-rc.2` Host contract.
 
 ## Bug history
 

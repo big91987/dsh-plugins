@@ -14,18 +14,25 @@ function setupHost() {
       { type: 'turn/start', seq: 0, time: 1 },
       { type: 'user/message', seq: 1, time: 2 },
       { type: 'turn/end', seq: 2, time: 3 },
+      { type: 'session/title', seq: 3, time: 4, data: { title: 'MaaS P1.5.2 开发' } },
     ],
   }
   const attachSession = vi.fn(() => Promise.resolve())
   const workspace = { id: 'new-workspace', sessionIds: [] as string[], attachSession }
-  const createAgent = vi.fn((_options: Parameters<ContinuationHost['agents']['create']>[0]) => Promise.resolve())
+  const childSession = { id: 'child-session' }
+  const childAgent = { session: childSession }
+  const createAgent = vi.fn((_options: Parameters<ContinuationHost['agents']['create']>[0]) => Promise.resolve({
+    agent: childAgent,
+  }))
+  const rename = vi.fn()
   const host: ContinuationHost = {
     sessionQuery: { readSession: vi.fn(() => Promise.resolve(source)), traceSession: vi.fn() },
-    agents: { create: createAgent },
+    agents: { create: createAgent, get: vi.fn(() => childAgent) },
     agentPresets: { mount: vi.fn(() => Promise.resolve({ mounted: true })) },
+    sessionTitle: { rename },
     workspaceRegistry: { list: () => [], create: vi.fn(() => Promise.resolve(workspace)) },
   }
-  return { host, createAgent, attachSession }
+  return { host, createAgent, attachSession, childSession, rename }
 }
 
 function managed(setup: ManagedWorktree['setup'] = { kind: 'skipped' }): ManagedWorktree {
@@ -42,7 +49,7 @@ function managed(setup: ManagedWorktree['setup'] = { kind: 'skipped' }): Managed
 
 describe('SessionContinuation.continueInWorktree', () => {
   it('publishes only after Worktree readiness, attaches a new Workspace, and assigns owner', async () => {
-    const { host, createAgent, attachSession } = setupHost()
+    const { host, createAgent, attachSession, childSession, rename } = setupHost()
     const setOwner = vi.fn(() => Promise.resolve())
     const worktrees: ContinuationWorktrees = {
       create: vi.fn(async request => {
@@ -67,6 +74,7 @@ describe('SessionContinuation.continueInWorktree', () => {
     }))
     expect(host.workspaceRegistry.create).toHaveBeenCalledWith('/managed/project')
     expect(attachSession).toHaveBeenCalledWith(snapshot?.sessionId)
+    expect(rename).toHaveBeenCalledWith(childSession, 'MaaS P1.5.2 开发 (1)')
     expect(setOwner).toHaveBeenCalledWith(WorktreeId('managed-1'), snapshot?.sessionId, expect.any(AbortSignal))
   })
 
