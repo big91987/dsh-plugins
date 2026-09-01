@@ -7,6 +7,14 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { selectedTaskOf, type BoardController } from '../../core/controller.ts'
 import { COLUMNS, canMoveManually, type TaskRecord } from '../../core/tasks.ts'
 import { t } from '../locales.ts'
+import {
+  loadProjectView,
+  matchesProjectView,
+  resolveProjectView,
+  saveProjectView,
+  type ProjectView,
+  type ProjectViewStorage,
+} from '../project-view.ts'
 import css from '../board.module.css'
 import { NewTaskModal } from './NewTaskModal.tsx'
 import { STATUS_KEY } from './status-key.ts'
@@ -31,6 +39,11 @@ const MemoTaskCard = memo(function MemoTaskCard({ task, pending, timeZone, onOpe
   return <TaskCard task={task} pending={pending} timeZone={timeZone} onClick={onClick} />
 })
 
+const browserProjectViewStorage: ProjectViewStorage = {
+  getItem: key => globalThis.localStorage.getItem(key),
+  setItem: (key, value) => { globalThis.localStorage.setItem(key, value) },
+}
+
 /** Board component; subscribes to the controller snapshot. */
 export function TaskBoard({ controller }: { controller: BoardController }) {
   const [snapshot, setSnapshot] = useState(controller.getSnapshot())
@@ -39,15 +52,39 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
     [controller],
   )
   const [filter, setFilter] = useState('')
+  const [projectView, setProjectView] = useState<ProjectView>(() => loadProjectView(
+    browserProjectViewStorage,
+    controller.getSnapshot().executionOptions.workspaces,
+  ))
   const [showNew, setShowNew] = useState(false)
   const selected = selectedTaskOf(snapshot)
   const archiveView = snapshot.archiveView
+  useEffect(() => {
+    if (projectView.kind !== 'workspace') return
+    if (snapshot.executionOptions.workspaces.some(workspace => workspace.workspaceId === projectView.workspaceId)) return
+    const fallback: ProjectView = { kind: 'all' }
+    setProjectView(fallback)
+    saveProjectView(browserProjectViewStorage, fallback)
+  }, [projectView, snapshot.executionOptions.workspaces])
+  useEffect(() => {
+    if (selected !== undefined && !matchesProjectView(selected, projectView)) controller.closeTask()
+  }, [controller, projectView, selected])
   // Archived tasks leave the columns; the archive view shows them instead.
   const visible = snapshot.tasks.filter(task =>
     (archiveView ? task.archivedAt !== undefined : task.archivedAt === undefined)
+    && matchesProjectView(task, projectView)
     && matchesFilter(task, filter),
   )
+  const archivedCount = snapshot.tasks.filter(task =>
+    task.archivedAt !== undefined && matchesProjectView(task, projectView),
+  ).length
   const openTask = useCallback((id: string): void => { controller.openTask(id) }, [controller])
+
+  const selectProject = (value: string): void => {
+    const next = resolveProjectView(value, snapshot.executionOptions.workspaces)
+    setProjectView(next)
+    saveProjectView(browserProjectViewStorage, next)
+  }
 
   return (
     <div className={css.board} data-dsh-taskboard-board="" data-dsh-plugin="task-board">
@@ -72,6 +109,18 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             })}
           </span>
         )}
+        <select
+          className={css.projectSelect}
+          aria-label={t('board.project')}
+          value={projectView.kind === 'workspace' ? `workspace:${projectView.workspaceId}` : projectView.kind}
+          onChange={event => { selectProject(event.target.value) }}
+        >
+          <option value="all">{t('board.project.all')}</option>
+          <option value="unassigned">{t('board.project.unassigned')}</option>
+          {snapshot.executionOptions.workspaces.map(workspace => (
+            <option key={workspace.workspaceId} value={`workspace:${workspace.workspaceId}`}>{workspace.title}</option>
+          ))}
+        </select>
         <input
           className={css.search}
           type="search"
@@ -87,7 +136,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
         >
           {archiveView
             ? t('board.backToBoard')
-            : t('board.archiveView', { count: String(snapshot.tasks.filter(task => task.archivedAt !== undefined).length) })}
+            : t('board.archiveView', { count: String(archivedCount) })}
         </button>
         <button
           type="button"
@@ -168,6 +217,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
       {showNew && (
         <NewTaskModal
           controller={controller}
+          initialWorkspaceId={projectView.kind === 'workspace' ? projectView.workspaceId : undefined}
           onClose={() => { setShowNew(false) }}
         />
       )}

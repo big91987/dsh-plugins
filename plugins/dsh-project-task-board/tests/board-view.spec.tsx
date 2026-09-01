@@ -7,7 +7,7 @@
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mountBoard } from '../src/client/board-mount.tsx'
 import { TaskBoard } from '../src/client/board/TaskBoard.tsx'
 import type { BoardController, ControllerSnapshot } from '../src/core/controller.ts'
@@ -17,6 +17,19 @@ import type { TaskRecord } from '../src/core/tasks.ts'
 
 const roots: Root[] = []
 let disposeMount: (() => void) | undefined
+const storageValues = new Map<string, string>()
+
+beforeEach(() => {
+  storageValues.clear()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storageValues.clear(),
+      getItem: (key: string) => storageValues.get(key) ?? null,
+      setItem: (key: string, value: string) => { storageValues.set(key, value) },
+    },
+  })
+})
 
 afterEach(() => {
   disposeMount?.()
@@ -26,6 +39,7 @@ afterEach(() => {
   }
   document.body.replaceChildren()
   document.documentElement.removeAttribute('data-dsh-taskboard-active')
+  localStorage.clear()
 })
 
 function task(overrides: Partial<TaskRecord> = {}): TaskRecord {
@@ -221,6 +235,138 @@ describe('TaskBoard card drag-and-drop status changes (#1195)', () => {
       )
     })
     expect(moveCalls).toHaveLength(0)
+  })
+})
+
+describe('TaskBoard project views', () => {
+  const workspaceOptions = [
+    { workspaceId: 'workspace-a', title: 'Project A' },
+    { workspaceId: 'workspace-b', title: 'Project B' },
+  ]
+
+  it('switches between all, unassigned, and concrete project tasks', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const controller = fakeController({
+      tasks: [
+        task({ id: 'a', title: 'Project A task', workspaceId: 'workspace-a' }),
+        task({ id: 'b', title: 'Project B task', workspaceId: 'workspace-b' }),
+        task({ id: 'none', title: 'Unassigned task' }),
+      ],
+      executionOptions: { workspaces: workspaceOptions, presets: [] },
+    })
+    await act(async () => { root.render(<TaskBoard controller={controller} />) })
+
+    const selector = container.querySelector('select[aria-label="项目"]') as HTMLSelectElement | null
+    expect(selector).not.toBeNull()
+    expect(container.textContent).toContain('Project A task')
+    expect(container.textContent).toContain('Project B task')
+    expect(container.textContent).toContain('Unassigned task')
+
+    await act(async () => {
+      selector!.value = 'workspace:workspace-a'
+      selector!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('Project A task')
+    expect(container.textContent).not.toContain('Project B task')
+    expect(container.textContent).not.toContain('Unassigned task')
+
+    await act(async () => {
+      selector!.value = 'unassigned'
+      selector!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.textContent).not.toContain('Project A task')
+    expect(container.textContent).toContain('Unassigned task')
+  })
+
+  it('remembers a valid project, falls back from a missing project, and closes hidden details', async () => {
+    localStorage.setItem('dsh.projectTaskBoard.projectView', 'workspace:workspace-a')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    let detailClosed = 0
+    const controller = fakeController({
+      tasks: [task({ id: 'a', title: 'Project A task', workspaceId: 'workspace-a' })],
+      selectedTaskId: 'a',
+      executionOptions: { workspaces: workspaceOptions, presets: [] },
+    }, {
+      closeTask: () => { detailClosed += 1 },
+    })
+    await act(async () => { root.render(<TaskBoard controller={controller} />) })
+    const selector = container.querySelector('select[aria-label="项目"]') as HTMLSelectElement
+    expect(selector.value).toBe('workspace:workspace-a')
+
+    await act(async () => {
+      selector.value = 'workspace:workspace-b'
+      selector.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(localStorage.getItem('dsh.projectTaskBoard.projectView')).toBe('workspace:workspace-b')
+    expect(detailClosed).toBe(1)
+
+    localStorage.setItem('dsh.projectTaskBoard.projectView', 'workspace:missing')
+    const secondContainer = document.createElement('div')
+    document.body.appendChild(secondContainer)
+    const secondRoot = createRoot(secondContainer)
+    roots.push(secondRoot)
+    await act(async () => { secondRoot.render(<TaskBoard controller={fakeController({ executionOptions: { workspaces: workspaceOptions, presets: [] } })} />) })
+    expect((secondContainer.querySelector('select[aria-label="项目"]') as HTMLSelectElement).value).toBe('all')
+  })
+
+  it('preselects only a concrete project when creating a task', async () => {
+    localStorage.setItem('dsh.projectTaskBoard.projectView', 'workspace:workspace-b')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const controller = fakeController({ executionOptions: { workspaces: workspaceOptions, presets: [] } })
+    await act(async () => { root.render(<TaskBoard controller={controller} />) })
+    const newButton = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('新建任务'))
+    expect(newButton).toBeDefined()
+    await act(async () => { newButton!.click() })
+    const selects = container.querySelectorAll('select')
+    expect(selects.length).toBeGreaterThanOrEqual(2)
+    expect(selects[1]!.value).toBe('workspace-b')
+  })
+
+  it('leaves new tasks unassigned from all-projects and unassigned views', async () => {
+    for (const savedView of ['all', 'unassigned']) {
+      localStorage.setItem('dsh.projectTaskBoard.projectView', savedView)
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      roots.push(root)
+      const controller = fakeController({ executionOptions: { workspaces: workspaceOptions, presets: [] } })
+      await act(async () => { root.render(<TaskBoard controller={controller} />) })
+      const newButton = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('新建任务'))
+      await act(async () => { newButton!.click() })
+      expect(container.querySelectorAll('select')[1]!.value).toBe('')
+      await act(async () => { root.unmount() })
+      roots.splice(roots.indexOf(root), 1)
+      container.remove()
+    }
+  })
+
+  it('applies the selected project to archived tasks and their count', async () => {
+    localStorage.setItem('dsh.projectTaskBoard.projectView', 'workspace:workspace-a')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const controller = fakeController({
+      archiveView: true,
+      tasks: [
+        task({ id: 'a', title: 'Archived A', workspaceId: 'workspace-a', status: 'done', archivedAt: 10 }),
+        task({ id: 'b', title: 'Archived B', workspaceId: 'workspace-b', status: 'done', archivedAt: 10 }),
+      ],
+      executionOptions: { workspaces: workspaceOptions, presets: [] },
+    })
+    await act(async () => { root.render(<TaskBoard controller={controller} />) })
+    expect(container.textContent).toContain('Archived A')
+    expect(container.textContent).not.toContain('Archived B')
+    expect(container.querySelector('section[data-status="archived"] [class*="columnCount"]')?.textContent).toBe('1')
   })
 })
 

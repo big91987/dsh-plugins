@@ -12,11 +12,11 @@ import { ModalShell, TaskContentFields } from './TaskForm.tsx'
 import css from '../board.module.css'
 
 /** New-task form overlay. */
-export function NewTaskModal({ controller, onClose }: { controller: BoardController; onClose: () => void }) {
+export function NewTaskModal({ controller, initialWorkspaceId, onClose }: { controller: BoardController; initialWorkspaceId?: string; onClose: () => void }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [prompt, setPrompt] = useState('')
-  const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '')
   const [mode, setMode] = useState('')
   const [permission, setPermission] = useState('')
   const [scheduleEnabled, setScheduleEnabled] = useState(false)

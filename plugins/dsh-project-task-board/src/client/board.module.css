@@ -165,6 +165,18 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
   color: var(--dsw-alias-label-tertiary);
 }
 
+.projectSelect {
+  flex: 0 1 190px;
+  min-width: 130px;
+  padding: 6px 28px 6px 10px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-input-major);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  outline: none;
+}
+
 /* --- columns ------------------------------------------------------------------ */
 
 .columns {
@@ -855,10 +867,20 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
     order: 4;
   }
 
+  .projectSelect {
+    flex: 1 0 100%;
+    min-width: 0;
+    order: 4;
+  }
+
+  .search {
+    order: 5;
+  }
+
   .boardHeader > button:not(.backButton) {
     flex: 1 1 0;
     min-width: 0;
-    order: 5;
+    order: 6;
   }
 
   .columns {
@@ -911,6 +933,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
   .iconButton,
   .linkButton,
   .search,
+  .projectSelect,
   .input,
   .select,
   .schedulePreset,
@@ -919,6 +942,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
   }
 
   .search,
+  .projectSelect,
   .input,
   .select,
   .schedulePreset {
@@ -1025,6 +1049,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
 .iconButton:focus-visible,
 .linkButton:focus-visible,
 .search:focus-visible,
+.projectSelect:focus-visible,
 .input:focus-visible,
 .select:focus-visible,
 .schedulePreset:focus-visible,
@@ -1041,6 +1066,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
 .iconButton,
 .linkButton,
 .search,
+.projectSelect,
 .input,
 .select,
 .schedulePreset,
@@ -1087,6 +1113,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
 
 /* --- search box focus (border tint + themed ring above) --- */
 .search:focus,
+.projectSelect:focus,
 .select:focus,
 .schedulePreset:focus {
   border-color: var(--dsw-alias-state-business-primary);
@@ -1108,6 +1135,7 @@ html[data-dsh-taskboard-active]:not([data-dsh-ssh-active]) [class*='centerCol'] 
   .iconButton,
   .linkButton,
   .search,
+  .projectSelect,
   .input,
   .select,
   .schedulePreset,
