@@ -1,8 +1,8 @@
-# dsh-task-board — DSH web GUI task board plugin
+# dsh-project-task-board — project-aware DSH task board
 
 English | [中文](README.zh.md)
 
-A hot-pluggable DeepSeek Harness (DSH) Web GUI plugin with a Host-authoritative task ledger, real DSH session execution, Host cron scheduling, and optional cross-platform idle-sleep protection. It is mounted through `cordis.patch.yml` and the profile mechanism and does not modify DSH source code.
+An independent fork of `@linxin666/dsh-client-ui-task-board@0.3.6` that adds project switching to its Host-authoritative task ledger, real DSH session execution, Host cron scheduling, and optional cross-platform idle-sleep protection. It is mounted through `cordis.patch.yml` and does not modify DSH or the upstream plugin.
 
 - The browser is an asynchronous view; closing the page does not stop Host scheduling or execution settlement.
 - Every run creates a separate DSH session and applies pinned workspace, agent preset, and permission before sending the task prompt.
@@ -10,6 +10,8 @@ A hot-pluggable DeepSeek Harness (DSH) Web GUI plugin with a Host-authoritative 
 
 ## Features
 
+- **Global project views**: switch the board between all projects, unassigned tasks, or one DSH workspace. The selection filters active and archived tasks and is remembered by the browser; a removed workspace falls back to all projects.
+- **Project-aware creation**: creating from a concrete project view preselects that workspace. Creating from all projects or unassigned keeps the task unassigned, and the existing editor can move it later.
 - **Task board UI**: a sidebar entry below New Session shows icon and text in the wide sidebar and an icon in the collapsed rail; the board provides five kanban columns, search, task details, archive/restore, execution history, and links to execution transcripts. Archived tasks are read-only except for restore, delete, and transcript viewing, and cannot run manually or on schedule until restored.
 - **Host-authoritative ledger**: tasks, schedules, and execution records live in `$DSH_HOME/task-board/ledger-v2.json`; browser actions become confirmed Host transactions.
 - **Bounded execution history**: each task keeps the most recent 20 execution records; the oldest runs are trimmed when a new run starts, so ledger size and write cost stay bounded regardless of how often a task has run.
@@ -32,21 +34,14 @@ A hot-pluggable DeepSeek Harness (DSH) Web GUI plugin with a Host-authoritative 
 
 ## Install
 
-Install the aggregate package or this package alone, then restart `dsh web`:
+The fork and upstream package share `$DSH_HOME/task-board/ledger-v2.json` and the same Host routes, so they must not be installed together. Remove the upstream package, add this source package, and restart `dsh web`:
 
 ```sh
-dsh plugin --profile web add @linxin666/dsh-client-ui-task-board@latest
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
 ```
 
-For local development:
-
-```sh
-git clone https://github.com/zhu1090093659/dsh-web.git
-cd dsh-web
-pnpm install
-pnpm build
-dsh plugin --profile web add link:$(pwd)/packages/dsh-task-board
-```
+Removing either package does not delete the ledger. Back up `~/.dsh/task-board/ledger-v2.json` before switching installations.
 
 ## Configuration
 
@@ -84,9 +79,9 @@ On macOS the backend starts `/usr/bin/caffeinate -i -w <host-pid>` and never req
 Node 20 or newer and the official NPM SDK packages are required; no DSH source checkout is used.
 
 ```sh
-pnpm --filter @linxin666/dsh-client-ui-task-board typecheck
-pnpm --filter @linxin666/dsh-client-ui-task-board test
-pnpm --filter @linxin666/dsh-client-ui-task-board build
+pnpm --filter dsh-project-task-board typecheck
+pnpm --filter dsh-project-task-board test
+pnpm --filter dsh-project-task-board build
 ```
 
 Set `DSH_POWER_SMOKE=1` to opt into the native helper smoke test on Windows, macOS, or Linux. It starts the fixed helper, waits for readiness, releases it in cleanup, and confirms process exit without changing the system power plan. Linux first probes systemd-logind with a bounded timeout; without a usable system bus the native portion is skipped while pure logic tests remain available.
@@ -116,4 +111,4 @@ Set `DSH_POWER_SMOKE=1` to opt into the native helper smoke test on Windows, mac
 
 ## Telemetry
 
-The browser half sends one anonymous install heartbeat per UTC day to dsh-market.com: a random localStorage id plus this package's name, nothing else. The server stores only a salted hash of that id, never IP addresses, and exposes aggregate counts only. See [docs/telemetry.md](../../docs/telemetry.md) for the full contract.
+The browser half retains the upstream anonymous install-heartbeat mechanism but reports the fork identity `dsh-project-task-board` instead of impersonating the upstream package. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for source, license, and modification details.

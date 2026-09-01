@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm --recursive build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm --recursive --if-present typecheck && tsc --noEmit"
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "0.1.1-rc.2",

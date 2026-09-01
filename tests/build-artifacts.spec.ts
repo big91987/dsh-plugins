@@ -9,3 +9,11 @@ for (const name of ['dsh-worktree', 'dsh-session-coordination']) {
     })
   })
 }
+
+describe('dsh-project-task-board', () => {
+  it('builds its Host, browser, and declaration entry points', async () => {
+    await access(new URL('../plugins/dsh-project-task-board/lib/index.js', import.meta.url))
+    await access(new URL('../plugins/dsh-project-task-board/lib/client.js', import.meta.url))
+    await access(new URL('../plugins/dsh-project-task-board/lib/types/index.d.ts', import.meta.url))
+  })
+})

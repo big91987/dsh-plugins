@@ -84,6 +84,7 @@
     "lib/**/*.d.ts",
     "lib/**/*.d.ts.map",
     "src",
+    "THIRD_PARTY_NOTICES.md",
     "cordis.patch.yml"
   ],
   "license": "Apache-2.0",

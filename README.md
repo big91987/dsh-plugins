@@ -2,11 +2,12 @@
 
 [简体中文](README.zh-CN.md) | English
 
-Three independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.1-rc.2`:
+Four independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.1-rc.2`:
 
 - [`dsh-worktree`](plugins/dsh-worktree/README.md): Codex-style **Continue in new worktree** alongside the official **Fork session** action, with automatic opening, same-project Worktree projection, managed Git Worktrees, and recovery UI.
 - [`dsh-session-coordination`](plugins/dsh-session-coordination/README.md): discovery, history reading, messaging, waiting, and forking across independent top-level Sessions.
 - [`dsh-compact-img`](plugins/dsh-compact-img/README.md): `/compact-img`, which replaces image-bearing history spans with text checkpoints before switching to a text-only model.
+- [`dsh-project-task-board`](plugins/dsh-project-task-board/README.md): a global task board switchable between all projects, unassigned tasks, and individual projects.
 
 The packages share this repository for maintenance but have no runtime dependency on one another. Install any subset into the `web` profile.
 
@@ -23,8 +24,11 @@ pnpm build
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-worktree
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
 npx @deepseek-ai/dsh@0.1.1-rc.2 web
 ```
+
+`dsh-project-task-board` is an independent fork of `@linxin666/dsh-client-ui-task-board@0.3.6`. They share the same Host ledger and routes and must not be installed together. Remove the upstream package before adding this fork.
 
 Local profile dependencies link to this checkout, so do not move or delete it while the plugins are installed. See the [Chinese guide](README.zh-CN.md) for usage, updates, uninstall instructions, persistent-data behavior, troubleshooting, and the accepted differences from the current official extension surface.
 

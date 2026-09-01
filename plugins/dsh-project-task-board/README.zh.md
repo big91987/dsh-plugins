@@ -1,8 +1,8 @@
-# dsh-task-board — DSH web GUI 任务看板插件
+# dsh-project-task-board — 支持项目切换的 DSH 任务看板
 
 [English](README.md) | 中文
 
-一个可热插拔的 DeepSeek Harness (DSH) Web GUI 插件，提供 Host 权威任务账本、真实 DSH 会话执行、Host cron 调度和可选的跨平台空闲睡眠保护。插件只通过 `cordis.patch.yml` 与 profile 机制挂载，不修改 DSH 源码。
+这是 `@linxin666/dsh-client-ui-task-board@0.3.6` 的独立 Fork，在原有 Host 权威任务账本、真实 DSH 会话执行、Host cron 调度和空闲睡眠保护能力上增加项目切换。插件只通过 `cordis.patch.yml` 与 profile 机制挂载，不修改 DSH 或上游插件源码。
 
 - 浏览器只是异步视图；关闭页面不会停止 Host 调度或执行结算。
 - 每次运行创建独立 DSH 会话，并在发送任务 Prompt 前应用钉住的工作区、agent 预设与权限。
@@ -10,6 +10,8 @@
 
 ## 功能
 
+- **全局项目视图**：看板顶部可以选择“全部项目”“未分配项目”或任一 DSH 工作区。筛选同时作用于普通任务和归档任务；浏览器会记住上次选择，工作区不存在时回到“全部项目”。
+- **项目内创建**：从具体项目视图新建任务时自动绑定该项目；从“全部项目”或“未分配项目”新建时保持未分配，之后仍可在任务编辑器中调整。
 - **任务看板 UI**：新会话按钮下方的侧边栏入口在宽栏显示图标和文字、在折叠 rail 显示图标；看板提供五列布局、搜索、任务详情、归档/恢复、执行历史和执行会话跳转。归档任务除恢复、删除和查看 transcript 外保持只读，恢复前不能手动或定时执行。
 - **Host 权威账本**：任务、计划和执行记录存于 `$DSH_HOME/task-board/ledger-v2.json`；浏览器动作只有经 Host 确认后才成为 UI 状态。
 - **有界执行历史**：每个任务只保留最近 20 条执行记录；新运行开始时截掉最旧的记录，使账本大小与每次写入成本不随任务历史无限增长。
@@ -32,21 +34,14 @@
 
 ## 安装
 
-安装聚合包或单独安装本包，然后重启 `dsh web`：
+本 Fork 与上游插件共用 `$DSH_HOME/task-board/ledger-v2.json` 和相同 Host 路由，不能同时安装。先移除上游包，再从本仓库安装并重启 `dsh web`：
 
 ```sh
-dsh plugin --profile web add @linxin666/dsh-client-ui-task-board@latest
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
 ```
 
-本地开发安装：
-
-```sh
-git clone https://github.com/zhu1090093659/dsh-web.git
-cd dsh-web
-pnpm install
-pnpm build
-dsh plugin --profile web add link:$(pwd)/packages/dsh-task-board
-```
+移除上游包或本 Fork 都不会删除现有任务账本。切换安装前仍建议备份 `~/.dsh/task-board/ledger-v2.json`。
 
 ## 配置
 
@@ -84,9 +79,9 @@ macOS 后端启动 `/usr/bin/caffeinate -i -w <host-pid>`，绝不请求 `-d`。
 需要 Node 20 或更高版本及官方 NPM SDK 包；不使用 DSH 源码 checkout。
 
 ```sh
-pnpm --filter @linxin666/dsh-client-ui-task-board typecheck
-pnpm --filter @linxin666/dsh-client-ui-task-board test
-pnpm --filter @linxin666/dsh-client-ui-task-board build
+pnpm --filter dsh-project-task-board typecheck
+pnpm --filter dsh-project-task-board test
+pnpm --filter dsh-project-task-board build
 ```
 
 设置 `DSH_POWER_SMOKE=1` 可在 Windows、macOS 或 Linux 上显式启用原生 helper smoke：真实启动固定 helper、等待 ready、在清理路径释放并确认进程退出，不修改系统电源计划。Linux 会先以有界超时探测 systemd-logind；没有可用 system bus 时原生部分跳过，纯逻辑测试仍可运行。
@@ -116,4 +111,4 @@ pnpm --filter @linxin666/dsh-client-ui-task-board build
 
 ## 数据遥测
 
-浏览器半区每个 UTC 日向 dsh-market.com 发送一次匿名安装心跳：仅含一个 localStorage 随机 ID 与本包名，无其他数据。服务端只存储该 ID 的加盐哈希，不存 IP，且只暴露聚合计数。完整契约见 [docs/telemetry.md](../../docs/telemetry.md)。
+浏览器半区保留上游的匿名安装心跳机制，但上报的包名改为 `dsh-project-task-board`，不会冒充上游包。来源、许可证和修改说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
