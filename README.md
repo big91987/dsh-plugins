@@ -2,12 +2,13 @@
 
 [简体中文](README.zh-CN.md) | English
 
-Four independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.1-rc.2`:
+Five independently installable plugins for DeepSeek Harness, currently pinned to `@deepseek-ai/dsh@0.1.1-rc.2`:
 
 - [`dsh-worktree`](plugins/dsh-worktree/README.md): Codex-style **Continue in new worktree** alongside the official **Fork session** action, with automatic opening, same-project Worktree projection, managed Git Worktrees, and recovery UI.
 - [`dsh-session-coordination`](plugins/dsh-session-coordination/README.md): discovery, history reading, messaging, waiting, and forking across independent top-level Sessions.
 - [`dsh-compact-img`](plugins/dsh-compact-img/README.md): `/compact-img`, which replaces image-bearing history spans with text checkpoints before switching to a text-only model.
 - [`dsh-project-task-board`](plugins/dsh-project-task-board/README.md): a global task board switchable between all projects, unassigned tasks, and individual projects.
+- [`dsh-browser-preview`](plugins/dsh-browser-preview/README.md): a Codex-style Session browser shared by the user and Agent, with a focused right panel, maximize mode, and element annotations.
 
 The packages share this repository for maintenance but have no runtime dependency on one another. Install any subset into the `web` profile.
 
@@ -25,6 +26,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-worktree
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
 npx @deepseek-ai/dsh@0.1.1-rc.2 web
 ```
 

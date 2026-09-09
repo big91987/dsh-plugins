@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.md)
 
-这个仓库包含四个可以独立安装的 DeepSeek Harness 插件，目标版本是 `@deepseek-ai/dsh@0.1.1-rc.2`。仓库目前主要供个人和可信同事从源码安装使用，尚未把这些包分别发布到 npm。
+这个仓库包含五个可以独立安装的 DeepSeek Harness 插件，目标版本是 `@deepseek-ai/dsh@0.1.1-rc.2`。仓库目前主要供个人和可信同事从源码安装使用，尚未把这些包分别发布到 npm。
 
 | 插件 | 用途 | 使用入口 |
 | --- | --- | --- |
@@ -10,8 +10,9 @@
 | [`dsh-session-coordination`](plugins/dsh-session-coordination/README.md) | 让彼此独立的顶层 Session 查询、读历史、发消息、等待和派生新聊天 | 直接用自然语言要求 Agent 操作 |
 | [`dsh-compact-img`](plugins/dsh-compact-img/README.md) | 把当前会话历史中的图片转换成文字检查点，以便切换到不支持图片的模型 | `/compact-img` 命令 |
 | [`dsh-project-task-board`](plugins/dsh-project-task-board/README.zh.md) | 全局任务看板，可切换全部项目、未分配任务或具体项目 | 侧边栏“任务看板” |
+| [`dsh-browser-preview`](plugins/dsh-browser-preview/README.zh-CN.md) | 用户和 Agent 共用的 Session 浏览器，支持右栏预览、最大化和网页元素标注 | Session 顶部浏览器按钮或自然语言 |
 
-四个插件只共用仓库和开发工具，运行时互不依赖。可以只安装一个，也可以全部安装。
+五个插件只共用仓库和开发工具，运行时互不依赖。可以只安装一个，也可以全部安装。
 
 ## 一、环境要求
 
@@ -45,6 +46,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-worktree
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
 ```
 
 也可以只执行其中一条。安装目标是 DSH 的 `web` Profile，默认位于 `~/.dsh/profiles/web`；如果设置了 `DSH_HOME`，则位于 `$DSH_HOME/profiles/web`。
