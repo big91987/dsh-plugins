@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const OFFICIAL_SHA256 = '75d8a09a43a820e0ff8470e7b9c87b6dced523764ee650a8382317f6ef7a314b'
+const OFFICIAL_SHA256 = 'e784543780fb8ac7c38c853afd26b9b1713c6907eec2b07eff37461e07bd3be9'
 
 function replaceOnce(source, expected, replacement, label) {
   const first = source.indexOf(expected)
@@ -56,6 +56,18 @@ export function projectWorktreeWorkspaces(workspaces, mappings) {
   })
 }
 
+/** Poll only after the preceding request settles; disposal never schedules another request. */
+export function startWorktreePolling(refresh, onError, timers, delay = 500) {
+  let disposed = false
+  let timer
+  async function poll() {
+    try { await refresh() } catch (reason) { if (!disposed) onError(reason) }
+    finally { if (!disposed) timer = timers.setTimeout(poll, delay) }
+  }
+  void poll()
+  return () => { disposed = true; if (timer !== undefined) timers.clearTimeout(timer) }
+}
+
 export function transformWorkspaceClient(source, remoteBundle) {
   const digest = createHash('sha256').update(source).digest('hex')
   if (digest !== OFFICIAL_SHA256) {
@@ -79,6 +91,8 @@ export function transformWorkspaceClient(source, remoteBundle) {
     '\t\tlet continueInNewWorktree;\n',
     `\t\tlet continueInNewWorktree;
 \t\tlet worktreeRemote;
+\t\tlet worktreeWorkspaceSource;
+\t\t${startWorktreePolling.toString()}
 \t\tconst autoOpenPendingIds = new Set();
 \t\tlet currentWorktreeMappings = [];
 \t\tconst worktreeMappingListeners = new Set();
@@ -111,21 +125,18 @@ export function transformWorkspaceClient(source, remoteBundle) {
 \t\tfunction PendingWorktrees({ open, t, visible }) {
 \t\t\tconst [items, setItems] = (0, react.useState)([]);
 \t\t\tconst opened = (0, react.useRef)(new Set());
+\t\t\tconst alive = (0, react.useRef)(false);
 \t\t\tconst refresh = (0, react.useCallback)(() => {
 \t\t\t\tif (worktreeRemote === void 0) return Promise.resolve();
 \t\t\t\treturn worktreeRemote.listPending().then((result) => {
 \t\t\t\t\tif (!result.ok) throw new Error(result.error.message);
-\t\t\t\t\tsetItems(result.value);
+\t\t\t\t\tif (alive.current) setItems(result.value);
 \t\t\t\t});
 \t\t\t}, []);
 \t\t\t(0, react.useEffect)(() => {
-\t\t\t\tlet disposed = false;
-\t\t\t\tconst poll = () => { refresh().catch((reason) => {
-\t\t\t\t\tif (!disposed) console.warn("pending Worktree refresh rejected:", reason);
-\t\t\t\t}); };
-\t\t\t\tpoll();
-\t\t\t\tconst timer = window.setInterval(poll, 500);
-\t\t\t\treturn () => { disposed = true; window.clearInterval(timer); };
+\t\t\t\talive.current = true;
+\t\t\t\tconst stop = startWorktreePolling(refresh, (reason) => { console.warn("pending Worktree refresh rejected:", reason); }, window);
+\t\t\t\treturn () => { alive.current = false; stop(); };
 \t\t\t}, [refresh]);
 \t\t\t(0, react.useEffect)(() => {
 \t\t\t\tfor (const item of items) {
@@ -178,204 +189,86 @@ export function transformWorkspaceClient(source, remoteBundle) {
 `,
     'pending Worktree component',
   )
-  output = replaceOnce(
-    output,
-    `\t\t\t\t{\n\t\t\t\t\tid: "fork",\n\t\t\t\t\tlabel: t("menu.fork"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},`,
-    `\t\t\t\t{\n\t\t\t\t\tid: "fork",\n\t\t\t\t\tlabel: t("menu.fork"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {})\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\tid: "continue-worktree",\n\t\t\t\t\tlabel: t("menu.continueWorktree"),\n\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderClose16, {})\n\t\t\t\t},`,
-    'Fork menu item',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst sessionMenuItems = [',
-    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst [contextMenuPoint, setContextMenuPoint] = (0, react.useState)(null);\n\t\t\tconst sessionMenuItems = [',
-    'Session context-menu anchor state',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\tconst workspaces = useWorkspaces((state) => state.items);',
-    '\t\t\tconst rawWorkspaces = useWorkspaces((state) => state.items);\n\t\t\tconst worktreeMappings = useWorktreeMappings();\n\t\t\tconst workspaces = (0, react.useMemo)(() => projectWorktreeWorkspaces(rawWorkspaces, worktreeMappings), [rawWorkspaces, worktreeMappings]);',
-    'Workspace Worktree projection',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\tconst members = [];\n\t\t\t\tfor (const id of workspace.sessionIds) {',
-    '\t\t\t\tconst members = [];\n\t\t\t\tconst worktreeSessionIds = new Set(workspace.worktreeSessionIds ?? []);\n\t\t\t\tfor (const id of workspace.sessionIds) {',
-    'group Worktree identity set',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\t\tmembers.push(summary);',
-    '\t\t\t\t\tmembers.push(worktreeSessionIds.has(id) ? { ...summary, worktree: true } : summary);',
-    'group Worktree Session marker',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\tcompleted: s.completed === true,\n\t\t\t\tupdatedAt: s.updatedAt,',
-    '\t\t\t\tcompleted: s.completed === true,\n\t\t\t\tworktree: s.worktree === true,\n\t\t\t\tupdatedAt: s.updatedAt,',
-    'derived Worktree Session marker',
-  )
-  output = replaceOnce(
-    output,
-    '\t\tfunction deriveFlat(list, archivedSessionIds) {\n\t\t\tconst archived = new Set(archivedSessionIds);\n\t\t\tconst descendants = (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(list.byId);',
-    '\t\tfunction deriveFlat(list, archivedSessionIds, workspaces) {\n\t\t\tconst archived = new Set(archivedSessionIds);\n\t\t\tconst descendants = (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(list.byId);\n\t\t\tconst worktreeSessionIds = new Set(workspaces.flatMap((workspace) => workspace.worktreeSessionIds ?? []));',
-    'flat Worktree Session identity',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\trows.push(s);\n\t\t\t}\n\t\t\trows.sort(byRecency);',
-    '\t\t\t\trows.push(worktreeSessionIds.has(id) ? { ...s, worktree: true } : s);\n\t\t\t}\n\t\t\trows.sort(byRecency);',
-    'flat Worktree Session marker',
-  )
-  output = replaceOnce(
-    output,
-    '\t\tfunction FlatList({ useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {\n\t\t\tconst list = useSessions((s) => s);\n\t\t\tconst baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds), [list, archivedSessionIds]);',
-    '\t\tfunction FlatList({ useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, workspaces, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {\n\t\t\tconst list = useSessions((s) => s);\n\t\t\tconst baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds, workspaces), [list, archivedSessionIds, workspaces]);',
-    'flat Worktree projection input',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\t\t\t\tarchivedSessionIds,\n\t\t\t\t\t\t\torderBy,',
-    '\t\t\t\t\t\t\tarchivedSessionIds,\n\t\t\t\t\t\t\tworkspaces,\n\t\t\t\t\t\t\torderBy,',
-    'flat Worktree Workspace prop',
-  )
-  output = replaceOnce(
-    output,
-    `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},`,
-    `\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},
-\t\t\t\t\tonContextMenu: (e) => {
-\t\t\t\t\t\tif (row.blank) return;
-\t\t\t\t\t\te.preventDefault();
-\t\t\t\t\t\te.stopPropagation();
-\t\t\t\t\t\tsetContextMenuPoint(new DOMRect(e.clientX, e.clientY, 0, 0));
-\t\t\t\t\t\tsetMenuOpen(true);
-\t\t\t\t\t},`,
-    'Session row context-menu handler',
-  )
-  output = replaceOnce(
-    output,
+  output = replaceOnce(output,
+    '\t\t\tconst workspaces = ctx.get("workspaces");',
+    '\t\t\tconst workspaces = ctx.get("workspaces");\n\t\t\tworktreeWorkspaceSource = workspaces.list;\n\t\t\tctx.effect(() => workspaces.list.subscribe(() => { currentWorktreeMappings = [...currentWorktreeMappings]; for (const listener of worktreeMappingListeners) listener(); }));',
+    'Worktree marker Workspace source');
+  output = replaceOnce(output,
+    '\t\t\tconst storedWorkspaces = useWorkspaces((state) => state.items);',
+    '\t\t\tconst rawWorkspaces = useWorkspaces((state) => state.items);\n\t\t\tconst worktreeMappings = useWorktreeMappings();\n\t\t\tconst storedWorkspaces = (0, react.useMemo)(() => projectWorktreeWorkspaces(rawWorkspaces, worktreeMappings), [rawWorkspaces, worktreeMappings]);',
+    'Workspace Worktree projection');
+  output = replaceOnce(output,
+    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst menuOpenState =',
+    '\t\t\tconst [menuOpen, setMenuOpen] = (0, react.useState)(false);\n\t\t\tconst [contextMenuPoint, setContextMenuPoint] = (0, react.useState)(null);\n\t\t\tconst mappings = useWorktreeMappings();\n\t\t\tconst worktree = mappings.some((mapping) => worktreeWorkspaceSource?.getSnapshot().items.some((workspace) => workspace.path === mapping.worktreeWorkspacePath && workspace.sessionIds.includes(node.id)));\n\t\t\tconst menuOpenState =',
+    'Session context-menu and Worktree state');
+  output = replaceOnce(output,
+    '\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},',
+    '\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\tonOpen(node.id);\n\t\t\t\t\t},\n\t\t\t\t\tonContextMenu: (e) => {\n\t\t\t\t\t\tif (row.blank) return;\n\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\tsetContextMenuPoint(new DOMRect(e.clientX, e.clientY, 0, 0));\n\t\t\t\t\t\tsetMenuOpen(true);\n\t\t\t\t\t},',
+    'Session row context-menu handler');
+  output = replaceOnce(output,
     '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,',
     '\t\t\t\t\t\t\t\tportal: true,\n\t\t\t\t\t\t\t\tgetAnchorRect: contextMenuPoint === null ? void 0 : () => contextMenuPoint,\n\t\t\t\t\t\t\t\tcloseOnPointerLeave: true,',
-    'Session context-menu cursor anchor',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
-    '\t\t\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\t\t\tsetContextMenuPoint(null);\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
-    'Session overflow anchor reset',
-  )
-  output = replaceOnce(
-    output,
-    `\t\t\t\t\t\t(0, react_jsx_runtime.jsx)("span", {
-\t\t\t\t\t\t\tclassName: Rows_module_css_default.title,
-\t\t\t\t\t\t\tchildren: title
-\t\t\t\t\t\t}),`,
-    `\t\t\t\t\t\t(0, react_jsx_runtime.jsx)("span", {
-\t\t\t\t\t\t\tclassName: Rows_module_css_default.title,
-\t\t\t\t\t\t\tchildren: title
-\t\t\t\t\t\t}),
-\t\t\t\t\t\trow.worktree && (0, react_jsx_runtime.jsx)("span", {
-\t\t\t\t\t\t\t"aria-label": t("session.worktree"),
-\t\t\t\t\t\t\ttitle: t("session.worktree"),
-\t\t\t\t\t\t\tstyle: { display: "inline-flex", flex: "none", marginInlineEnd: "6px", opacity: .65 },
-\t\t\t\t\t\t\tchildren: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, { size: 13 })
-\t\t\t\t\t\t}),`,
-    'Worktree Session indicator',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\t\t\t\t\t\tif (id === "fork") onFork(node.id);',
-    '\t\t\t\t\t\t\t\t\tif (id === "fork") onFork(node.id);\n\t\t\t\t\t\t\t\t\tif (id === "continue-worktree") continueInNewWorktree?.(node.id);',
-    'Fork menu handler',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t"menu.fork": "分叉会话",',
-    '\t\t\t"menu.fork": "分叉会话",\n\t\t\t"menu.continueWorktree": "在新工作树中继续",',
-    'Chinese Fork label',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t"delete.pending": "正在删除工作区…",',
-    `\t\t\t"delete.pending": "正在删除工作区…",
-\t\t\t"pending.stage.queued": "工作树等待创建",
-\t\t\t"pending.stage.creating": "正在创建工作树",
-\t\t\t"pending.stage.setting-up": "正在初始化工作树",
-\t\t\t"pending.stage.worktree-ready": "工作树已就绪",
-\t\t\t"pending.stage.published": "新工作树聊天已就绪",
-\t\t\t"pending.stage.failed": "工作树创建失败",
-\t\t\t"pending.stage.cancelled": "工作树创建已取消",
-\t\t\t"pending.source": "来源会话：{id}",
-\t\t\t"pending.output.truncated": "较早输出已截断",
-\t\t\t"pending.action.cancel": "取消",
-\t\t\t"pending.action.retry": "重试",
-\t\t\t"pending.action.continueWithoutSetup": "忽略初始化错误并继续",
-\t\t\t"pending.action.dismiss": "关闭",
-\t\t\t"session.worktree": "工作树会话",`,
-    'Chinese pending labels',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t"menu.fork": "Fork session",',
-    '\t\t\t"menu.fork": "Fork session",\n\t\t\t"menu.continueWorktree": "Continue in new worktree",',
-    'English Fork label',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t"delete.pending": "Deleting workspace…",',
-    `\t\t\t"delete.pending": "Deleting workspace…",
-\t\t\t"pending.stage.queued": "Worktree queued",
-\t\t\t"pending.stage.creating": "Creating worktree",
-\t\t\t"pending.stage.setting-up": "Setting up worktree",
-\t\t\t"pending.stage.worktree-ready": "Worktree ready",
-\t\t\t"pending.stage.published": "New worktree chat ready",
-\t\t\t"pending.stage.failed": "Worktree creation failed",
-\t\t\t"pending.stage.cancelled": "Worktree creation cancelled",
-\t\t\t"pending.source": "Source session: {id}",
-\t\t\t"pending.output.truncated": "Earlier output truncated",
-\t\t\t"pending.action.cancel": "Cancel",
-\t\t\t"pending.action.retry": "Retry",
-\t\t\t"pending.action.continueWithoutSetup": "Continue without setup",
-\t\t\t"pending.action.dismiss": "Dismiss",
-\t\t\t"session.worktree": "Worktree session",`,
-    'English pending labels',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\t\t\t!wide && (0, react_jsx_runtime.jsx)("div", {',
-    `\t\t\t\t\t(0, react_jsx_runtime.jsx)(PendingWorktrees, { open, t, visible: wide }),
-\t\t\t\t\t!wide && (0, react_jsx_runtime.jsx)("div", {`,
-    'pending Worktree panel',
-  )
-  output = replaceOnce(
-    output,
+    'Session context-menu cursor anchor');
+  output = replaceOnce(output,
+    '\t\t\t\t\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
+    '\t\t\t\t\t\t\t\t\tonClick: () => {\n\t\t\t\t\t\t\t\t\t\tsetContextMenuPoint(null);\n\t\t\t\t\t\t\t\t\t\tsetMenuOpen((v) => !v);',
+    'Session overflow anchor reset');
+  output = replaceOnce(output,
+    '\t\t\t\t\t\t\tchildren: title\n\t\t\t\t\t\t}),',
+    '\t\t\t\t\t\t\tchildren: title\n\t\t\t\t\t\t}),\n\t\t\t\t\t\tworktree && (0, react_jsx_runtime.jsx)("span", { "aria-label": t("session.worktree"), title: t("session.worktree"), style: { display: "inline-flex", flex: "none", marginInlineEnd: "6px", opacity: .65 }, children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, { size: 13 }) }),',
+    'Worktree Session indicator');
+  output = replaceOnce(output,
     '\t\tfunction apply(ctx) {\n',
-    `\t\tasync function apply(ctx) {\n\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tcontinueInNewWorktree = (sessionId) => {\n\t\t\t\tctx.remote.dshWorktree.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {\n\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);\n\t\t\t\t\tautoOpenPendingIds.add(result.value.pendingSessionId);\n\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });\n\t\t\t};\n`,
-    'apply declaration',
-  )
-  output = replaceOnce(
-    output,
-    '\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n',
-    '\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);\n\t\t\tworktreeRemote = ctx.get("remote.dshWorktree");\n\t\t\tif (worktreeRemote === void 0) throw new Error("dsh-worktree Remote namespace did not mount");\n\t\t\tawait refreshWorktreeMappings();\n',
-    'mounted Remote lookup',
-  )
-  output = replaceOnce(
-    output,
-    'ctx.remote.dshWorktree.continueInWorktree',
-    'worktreeRemote.continueInWorktree',
-    'Worktree Remote call',
-  )
-  output = replaceOnce(
-    output,
-    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t}`,
-    `\t\t\tctx.slots.inject("conversation.hero.workspace", () => ctx.slots.register({\n\t\t\t\tname: "conversation.hero.workspace",\n\t\t\t\tchildren: { "conversation.hero.workspace.directoryFlow": {\n\t\t\t\t\tkind: "single",\n\t\t\t\t\tscope: "root"\n\t\t\t\t} },\n\t\t\t\tinject: pickerInjected,\n\t\t\t\tlocale: NS\n\t\t\t}, WorkspacePicker));\n\t\t\treturn async () => {\n\t\t\t\tcontinueInNewWorktree = void 0;\n\t\t\t\tautoOpenPendingIds.clear();\n\t\t\t\tcurrentWorktreeMappings = [];\n\t\t\t\tworktreeMappingListeners.clear();\n\t\t\t\tworktreeRemote = void 0;\n\t\t\t\tawait disposeWorktreeRemote();\n\t\t\t};\n\t\t}`,
-    'apply tail',
-  )
-  output = replaceOnce(
-    output,
-    `\t\t\t"workspaces",\n\t\t\t"locale"`,
-    `\t\t\t"workspaces",\n\t\t\t"locale",\n\t\t\t"remote"`,
-    'runtime injection list',
-  )
+    `\t\tfunction ContinueWorktreeMenuItem({ sessionId, useMenuOpenState, continueInWorktree, t }) {
+\t\t\tconst [, setMenuOpen] = useMenuOpenState();
+\t\t\treturn (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MenuItemButton, {
+\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, {}),
+\t\t\t\tonSelect: () => { setMenuOpen(false); continueInWorktree(sessionId); },
+\t\t\t\tchildren: t("menu.continueWorktree")
+\t\t\t});
+\t\t}
+\t\tasync function apply(ctx) {
+\t\t\tconst disposeWorktreeRemote = await ctx.remote.$mount(DSH_WORKTREE_REMOTE);
+\t\t\tworktreeRemote = ctx.get("remote.dshWorktree");
+\t\t\tif (worktreeRemote === void 0) throw new Error("dsh-worktree Remote namespace did not mount");
+\t\t\tawait refreshWorktreeMappings();
+\t\t\tcontinueInNewWorktree = (sessionId) => {
+\t\t\t\tworktreeRemote.continueInWorktree({ sourceSessionId: sessionId }).then((result) => {
+\t\t\t\t\tif (!result.ok) throw new Error(result.error.message);
+\t\t\t\t\tautoOpenPendingIds.add(result.value.pendingSessionId);
+\t\t\t\t}).catch((reason) => { console.warn("continue in new worktree rejected:", reason); });
+\t\t\t};
+\t\t\tctx.on("connection/reset", () => { refreshWorktreeMappings().catch((reason) => console.warn("Worktree mapping refresh rejected:", reason)); });
+\t\t\tctx.slots.inject("sidebar.workspaces.session.menu.item", () => ctx.slots.register({
+\t\t\t\tname: "sidebar.workspaces.session.menu.item", id: "continue-worktree", order: 350, locale: NS,
+\t\t\t\tinject: () => ({ continueInWorktree: continueInNewWorktree })
+\t\t\t}, ContinueWorktreeMenuItem));
+`,
+    'mounted Remote and Worktree menu contribution');
+  output = replaceOnce(output,
+    '\t\t\t\tclassName: clsx(WorkspaceBrowser_module_css_default.root, !wide && WorkspaceBrowser_module_css_default.rail),\n\t\t\t\tchildren: [',
+    '\t\t\t\tclassName: clsx(WorkspaceBrowser_module_css_default.root, !wide && WorkspaceBrowser_module_css_default.rail),\n\t\t\t\tchildren: [\n\t\t\t\t\t(0, react_jsx_runtime.jsx)(PendingWorktrees, { open, t, visible: wide }),',
+    'pending Worktree panel');
+  for (const [language, labels] of Object.entries({
+    zh: { 'menu.continueWorktree': '在新工作树中继续', 'session.worktree': '工作树会话', 'pending.stage.queued': '工作树等待创建', 'pending.stage.creating': '正在创建工作树', 'pending.stage.setting-up': '正在初始化工作树', 'pending.stage.worktree-ready': '工作树已就绪', 'pending.stage.published': '新工作树聊天已就绪', 'pending.stage.failed': '工作树创建失败', 'pending.stage.cancelled': '工作树创建已取消', 'pending.source': '来源会话：{id}', 'pending.output.truncated': '较早输出已截断', 'pending.action.cancel': '取消', 'pending.action.retry': '重试', 'pending.action.continueWithoutSetup': '忽略初始化错误并继续', 'pending.action.dismiss': '关闭' },
+    en: { 'menu.continueWorktree': 'Continue in new worktree', 'session.worktree': 'Worktree session', 'pending.stage.queued': 'Worktree queued', 'pending.stage.creating': 'Creating worktree', 'pending.stage.setting-up': 'Setting up worktree', 'pending.stage.worktree-ready': 'Worktree ready', 'pending.stage.published': 'New worktree chat ready', 'pending.stage.failed': 'Worktree creation failed', 'pending.stage.cancelled': 'Worktree creation cancelled', 'pending.source': 'Source session: {id}', 'pending.output.truncated': 'Earlier output truncated', 'pending.action.cancel': 'Cancel', 'pending.action.retry': 'Retry', 'pending.action.continueWithoutSetup': 'Continue without setup', 'pending.action.dismiss': 'Dismiss' },
+  })) {
+    const anchor = `\t\t\t"menu.fork": "${language === 'zh' ? '分叉会话' : 'Fork session'}",`;
+    output = replaceOnce(output, anchor, `${anchor}\n${Object.entries(labels).map(([key, value]) => `\t\t\t${JSON.stringify(key)}: ${JSON.stringify(value)},`).join('\n')}`, `${language} Worktree labels`);
+  }
+  output = replaceOnce(output,
+    '\t\t\t}, WorkspacePicker));\n\t\t}',
+    `\t\t\t}, WorkspacePicker));
+\t\t\treturn async () => {
+\t\t\t\tcontinueInNewWorktree = void 0;
+\t\t\t\tautoOpenPendingIds.clear();
+\t\t\t\tcurrentWorktreeMappings = [];
+\t\t\t\tworktreeMappingListeners.clear();
+\t\t\t\tworktreeRemote = void 0;
+\t\t\t\tworktreeWorkspaceSource = void 0;
+\t\t\t\tawait disposeWorktreeRemote();
+\t\t\t};
+\t\t}`, 'Worktree Remote cleanup');
   return output
 }
 

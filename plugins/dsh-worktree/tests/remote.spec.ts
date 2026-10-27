@@ -1,21 +1,25 @@
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { WorktreeRemote } from '../src/remote.ts'
 import { TYPERT } from '../src/typert.ts'
 
 describe('WorktreeRemote', () => {
-  it('publishes only zod-backed strict codecs accepted by the 0.1.1-rc.2 loader', () => {
-    expect(TYPERT.invocations.map(invocation => invocation.method)).not.toContain('continueInChat')
-    for (const invocation of TYPERT.invocations) {
-      for (const parameter of invocation.parameters) {
-        expect(parameter.codec.mode).toBe('strict')
-        expect(parameter.codec.typeSymbol).not.toBe('')
-        expect(parameter.codec.schema).toHaveProperty('_zod')
-      }
-      expect(invocation.result.mode).toBe('strict')
-      expect(invocation.result.typeSymbol).not.toBe('')
-      expect(invocation.result.schema).toHaveProperty('_zod')
-    }
+  it('registers its manifest through the real 0.2 Typert loader and validates browser requests', async () => {
+    const require = createRequire(import.meta.url)
+    const hostRequire = createRequire(require.resolve('@deepseek-ai/dsh/package.json'))
+    const { validateTypertManifest } = await import(pathToFileURL(hostRequire.resolve('@deepseek-ai/dsh-typert-loader')).href)
+    const manifest = validateTypertManifest('dsh-worktree', TYPERT)
+    expect(manifest.invocations.map((invocation: { method: string }) => invocation.method)).not.toContain('continueInChat')
+    const continuation = manifest.invocations.find((invocation: { method: string }) => invocation.method === 'continueInWorktree')
+    const request = continuation.parameters[0].codec.create()
+    expect(request.parse({ sourceSessionId: 'source', environment: { name: 'setup', command: 'npm ci' } })).toEqual({ sourceSessionId: 'source', environment: { name: 'setup', command: 'npm ci' } })
+    expect(request.safeParse({ sourceSessionId: '' }).success).toBe(false)
+    expect(continuation.result.create().parse({ pendingSessionId: 'pending-1' })).toEqual({ pendingSessionId: 'pending-1' })
+    const retry = manifest.invocations.find((invocation: { method: string }) => invocation.method === 'retryPending')
+    expect(retry.parameters[0].codec.create().parse({ id: 'pending-1' })).toEqual({ id: 'pending-1' })
+    expect(retry.result.create().parse(undefined)).toBeUndefined()
   })
 
   it('delegates browser operations to the scoped Session continuation service', async () => {

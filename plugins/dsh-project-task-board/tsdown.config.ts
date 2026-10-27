@@ -12,12 +12,15 @@ import { clientBundle } from './scripts/tsdown.client.ts'
 
 export default clientBundle('dsh-project-task-board', ['src/index.ts', 'src/invariant.ts'], {
   libExternal: [
+    '@deepseek-ai/schemastery',
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-agent-preset-registry',
+    '@deepseek-ai/dsh-workspace',
+    '@deepseek-ai/dsh-client-store',
     '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-client-locale',
-    '@deepseek-ai/dsh-client-runtime',
     '@deepseek-ai/dsh-client-ui-settings',
     '@deepseek-ai/dsh-client-ui-slots',
-    '@deepseek-ai/dsh-host-apiproxy',
     '@deepseek-ai/dsh-host-webserver',
     '@deepseek-ai/dsh-settings',
     '@deepseek-ai/dsh-system-prompt',

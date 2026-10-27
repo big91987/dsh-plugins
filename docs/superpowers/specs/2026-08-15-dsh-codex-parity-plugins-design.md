@@ -11,7 +11,7 @@ The observable behavior must be checked against the current Codex release before
 
 ## Repository and publication boundaries
 
-The repository is a pnpm monorepo at `/Users/zhaojiuzhou/work/dsh-plugins`. Each plugin owns its package manifest, `cordis.patch.yml`, source, tests, build, version, and release. The repository root shares development tooling only.
+The repository is a pnpm monorepo at `<plugin-repository>`. Each plugin owns its package manifest, `cordis.patch.yml`, source, tests, build, version, and release. The repository root shares development tooling only.
 
 There is no mandatory umbrella bundle and no shared runtime package. Shared production code may be introduced later only when both plugins depend on the same stable responsibility rather than coincidentally similar helpers.
 
@@ -26,7 +26,7 @@ Git-host installation cannot select a monorepo subdirectory through the current 
 
 ## Source repository relationship
 
-`/Users/zhaojiuzhou/work/deepseek-harness` is a read-only upstream reference. No plugin work is committed there. The local branch `codex/session-workspaces` and its worktree remain migration evidence until both external plugins preserve the required behavior and the user separately authorizes cleanup.
+`<upstream-reference>` is a read-only upstream reference. No plugin work is committed there. The local branch `codex/session-workspaces` and its worktree remain migration evidence until both external plugins preserve the required behavior and the user separately authorizes cleanup.
 
 ## Package structure
 

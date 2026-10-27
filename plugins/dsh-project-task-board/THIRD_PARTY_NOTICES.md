@@ -7,3 +7,5 @@
 - Upstream license: Apache License 2.0
 
 The original license is retained in [LICENSE](LICENSE). This fork changes the package identity and adds client-side project selection, filtering, selection persistence, and project-aware new-task defaults. It preserves the upstream Host ledger schema, routes, scheduling, execution, and power-management behavior.
+
+The DSH 0.2 port replaces removed SDK entry points with official Host controllers, registries, Client configuration forms, and Workspace navigation. The inherited `src/client/settings-form.ts` is now maintained directly in this package: its former `shared/client/settings/settings-form.ts` source and sync script were not included in the fork. Its source attribution and Apache-2.0 license remain unchanged; there is no second generated maintenance copy.

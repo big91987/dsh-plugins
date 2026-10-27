@@ -8,13 +8,18 @@
  * shell fails the whole boot when a plugin apply throws, and an external
  * plugin must not take the GUI down.
  */
-import type { ClientContext, ISessions, IWorkspaces, SessionId, SettingsScope, SettingsScopeSpec } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale) and its
 // LocaleNamespaceMap merge table.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the settings-surface Context merge (ctx.settingsScope).
+// Type-only: pulls the settings-surface Context merge (ctx.configForms).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { BoardController } from '../core/controller.ts'
 import { LocalStorageTaskStore } from '../core/store.ts'
@@ -30,7 +35,7 @@ import { reportDailyHeartbeat } from './telemetry.ts'
 const NS = 'task-board'
 
 /** Settings namespace the settings card edits (the Host plugin registers it). */
-const TASK_BOARD_NS = 'task-board'
+const TASK_BOARD_NS = 'ui-project-task-board'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -38,43 +43,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'task-board': TaskBoardKey
   }
 
-  interface SlotMap {
-    /**
-     * The child slot the Web UI plugin group declares; this card registers
-     * into the group instead of the top-level `settings.plugin.item` list.
-     * Spelled here with the same shape so this package can register without
-     * depending on the sibling UI package.
-     */
-    'web-ui.plugin.item': { kind: 'list'; scope: 'root'; owner: SettingsPluginItemOwnerProps }
-  }
 }
-
-/** Owner share of a plugin card (the section supplies nothing). */
-export interface SettingsPluginItemOwnerProps {
-  /** Marker field: card owner props are intentionally empty. */
-  children?: never
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /**
-     * Optional rc.6 compatibility binder provided by dsh-web-settings;
-     * absent when that group plugin is not installed, so callers fall back to
-     * the official settings scope.
-     */
-    webUiSettings?: { bind<S>(spec: SettingsScopeSpec<S>): SettingsScope<S> }
-  }
-}
-
 
 /** Required services (fiber inject waiting — the runtime must be up first). */
-export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'settingsScope', 'locale', 'remote']
+export const inject = ['slots', 'sessions', 'workspaces', 'uiWorkspace', 'configForms', 'locale', 'remote', 'remote.agentPresets']
 
 /**
  * Mount the task board.
  * @param ctx - client root context (services: sessions, workspaces).
  */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   // Anonymous install heartbeat (docs/telemetry.md): one beat per browser per
   // UTC day, package name only, silent failure.
   reportDailyHeartbeat([{ name: 'dsh-project-task-board' }])
@@ -97,22 +75,20 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'task-board: dictionaries')
 
-  // Plugin configuration card: one staged form over the `task-board` settings
-  // namespace, contributed to the Web UI plugin group.
-  const binder = ctx.get('webUiSettings') ?? ctx.settingsScope
-  const settingsScope = binder.bind<TaskBoardSettings>({ namespace: TASK_BOARD_NS })
+  // Staged configuration page for the unique Host Loader entry.
+  const settingsScope = ctx.configForms.get<TaskBoardSettings>(TASK_BOARD_NS)
   const settingsCard = new TaskBoardSettingsCardController(settingsScope)
-  ctx.slots.inject('web-ui.plugin.item', () => {
+  ctx.slots.inject('settings.section', () => {
     try {
       const unregister = ctx.slots.register({
-        name: 'web-ui.plugin.item',
-        id: 'task-board',
+        name: 'settings.section',
+        id: TASK_BOARD_NS,
         order: 110,
+        label: ctx.locale.bind(NS)('settings.title'),
         locale: NS,
         inject: () => settingsCard.inject(),
       }, TaskBoardSettingsCard)
       return () => {
-        settingsCard.dispose()
         unregister()
       }
     } catch {
@@ -132,7 +108,6 @@ export function apply(ctx: ClientContext): void {
     // narrow these two client services during a combined package build.
     const sessions = ctx.get('sessions') as unknown as ISessions
     const workspaces = ctx.get('workspaces') as unknown as IWorkspaces
-    const connection = ctx.get('connection') as ConnectionHandle
 
     // Core wiring: real runtime faces into the framework-free services.
     const store = new LocalStorageTaskStore()
@@ -140,8 +115,8 @@ export function apply(ctx: ClientContext): void {
       store,
       transport: new HttpTaskBoardHostTransport(),
       sessions: {
-        list: sessions.list,
-        open: id => sessions.open(id as SessionId),
+        list: { getSnapshot: () => undefined, subscribe: listener => sessions.list.subscribe(listener) },
+        open: id => ctx.uiWorkspace.openSession(id as SessionId),
       },
     })
     controller.start()
@@ -166,10 +141,10 @@ export function apply(ctx: ClientContext): void {
     disposers.push(workspaces.list.subscribe(pushWorkspaceOptions))
     const pushPresetOptions = async (): Promise<void> => {
       try {
-        const response = await connection.api.agentPresets.list({})
-        if (!response.result.ok) return
+        const response = await ctx.remote.agentPresets.list()
+        if (!response.ok) return
         controller.setExecutionOptions({
-          presets: response.result.value.presets.map(preset => ({
+          presets: response.value.presets.map(preset => ({
             id: preset.id,
             name: preset.name,
             description: preset.description,
@@ -207,6 +182,7 @@ export function apply(ctx: ClientContext): void {
     if (enabled) mountUi()
     else uiDisposer?.()
   }
-  settingsScope.subscribe(syncEnabled)
+  ctx.effect(() => settingsScope.subscribe(syncEnabled))
+  ctx.effect(() => () => { uiDisposer?.(); settingsCard.dispose() })
   syncEnabled()
 }

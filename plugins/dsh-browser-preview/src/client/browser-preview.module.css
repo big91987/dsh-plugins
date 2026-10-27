@@ -8,7 +8,7 @@
 .headerButton { width: 28px; height: 28px; border-radius: 7px; font-size: 18px; }
 .headerButton:hover, .toolbar button:hover:not(:disabled) { background: color-mix(in srgb, currentColor 10%, transparent); }
 
-:global(html[data-dsh-browser-preview-active] [class*='detailsCol'] > :not([data-dsh-browser-preview])) { display: none !important; }
+:global(html[data-dsh-browser-preview-active] [data-rightbar-col] > :not([data-dsh-browser-preview])) { display: none !important; }
 
 .panel {
   position: relative;

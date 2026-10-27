@@ -18,8 +18,8 @@
 ```sh
 pnpm install --frozen-lockfile
 pnpm --dir plugins/dsh-browser-preview build
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
-npx @deepseek-ai/dsh@0.1.1-rc.2 web
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
 安装后刷新已经打开的 DSH 页面。首次打开预览时，插件会尝试使用本机 Chrome、Chromium 或 Edge；也可以在插件配置中设置 `executablePath`。
@@ -27,7 +27,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 web
 如果装过旧的 F12 Inspector，验收新插件后再卸载，避免两个网页工具同时出现在界面中：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-f12-inspector
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-f12-inspector
 ```
 
 卸载不会删除 DSH Session。插件关闭或卸载时只会结束它自己创建的临时浏览器 Context。
@@ -50,6 +50,6 @@ Agent 使用示例：
 
 行为目标参考 Codex Desktop 的共享内置浏览器，但 Codex Desktop 的界面源码不在公开的 `openai/codex` 仓库中，因此本插件是基于公开产品行为和 DSH 扩展接口重新实现，不是复制其私有 UI 源码。
 
-DSH `0.1.1-rc.2` 的右侧详情栏是单占用 Slot，没有“按状态临时替换详情内容”的公开扩展点。本插件使用官方 Session 头部 Slot 添加入口，并在浏览器激活期间把自己的面板投影到现有详情列；关闭后官方工具详情恢复。这个兼容层需要在 DSH 客户端升级后重新验证。
+DSH `0.2.0-rc.2` 的右侧栏是单占用 Slot，没有“按状态临时替换详情内容”的公开扩展点。本插件使用官方 Session 头部 Slot 添加入口，并在浏览器激活期间把自己的面板投影到现有右侧列；关闭后官方右侧栏内容恢复。兼容层使用 `data-rightbar-col` 标识和 `openRightbar`/`closeRightbar` 布局方法，需要在后续 DSH 客户端升级后重新验证。
 
 网页不是 iframe，而是 Host 端独立浏览器的 CDP screencast。这解决了 `X-Frame-Options`、CSP 和跨域页面无法注入检查脚本的问题，但视频、高帧率动画和复杂拖拽的体验仍不如本地浏览器原生标签页。

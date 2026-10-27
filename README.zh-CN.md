@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.md)
 
-这个仓库包含五个可以独立安装的 DeepSeek Harness 插件，目标版本是 `@deepseek-ai/dsh@0.1.1-rc.2`。仓库目前主要供个人和可信同事从源码安装使用，尚未把这些包分别发布到 npm。
+这个仓库包含五个可以独立安装的 DeepSeek Harness 插件，目标版本是 `@deepseek-ai/dsh@0.2.0-rc.2`。仓库目前主要供个人和可信同事从源码安装使用，尚未把这些包分别发布到 npm。
 
 | 插件 | 用途 | 使用入口 |
 | --- | --- | --- |
@@ -19,10 +19,10 @@
 - macOS 或 Linux；Worktree 插件依赖本机 Git。
 - Node.js `^22.19.0` 或 `>=24.0.0`。
 - pnpm `11.7.0`。如果尚未启用，可先执行 `corepack enable`。
-- DeepSeek Harness `0.1.1-rc.2`。
+- DeepSeek Harness `0.2.0-rc.2`。
 - 能正常运行 `npx @deepseek-ai/dsh web` 的 DSH 配置和模型凭证。
 
-这里的 `rc.2` 是 `0.1.1` 正式版之前的第二个发布候选版本，不是插件的特殊运行模式。之所以固定它，是因为 Worktree 浏览器插件与这个版本的 Workspace 前端产物精确匹配。
+这里的 `rc.2` 是 `0.2.0` 正式版之前的第二个发布候选版本，不是插件的特殊运行模式。之所以固定它，是因为 Worktree 浏览器插件与这个版本的 Workspace 前端产物精确匹配。
 
 ## 二、安装
 
@@ -42,11 +42,10 @@ pnpm build
 全部安装：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-worktree
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-compact-img
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-worktree
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-compact-img
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-browser-preview
 ```
 
 也可以只执行其中一条。安装目标是 DSH 的 `web` Profile，默认位于 `~/.dsh/profiles/web`；如果设置了 `DSH_HOME`，则位于 `$DSH_HOME/profiles/web`。
@@ -54,7 +53,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-browser-p
 `dsh-project-task-board` 是 `@linxin666/dsh-client-ui-task-board@0.3.6` 的独立 Fork，两者共用同一任务账本和 Host 路由，不能同时安装。安装本 Fork 前先执行：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
 ```
 
 ### 3. 启动
@@ -62,7 +61,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-clien
 固定使用已验证版本：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 web
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
 平时使用下面的命令也可以，但 npm 的默认版本将来可能升级，因此升级后若 Worktree 插件构建或加载失败，应先核对实际 DSH 版本：
@@ -202,7 +201,7 @@ Agent 实际调用的工具是：
 
 这个插件使用官方的 Cordis 插件生命周期、Session 查询、Agent create/resume、Workspace registry、Session 事件日志和工具注册能力，属于附加式 Host 插件，不替换官方 UI。
 
-但 DSH `0.1.1-rc.2` 没有一个“跨顶层 Session 通信”的单一公共 API，也没有 Codex 同名的线程管理协议。因此它不是几行代码调用一个现成接口，而是插件自己组合并负责以下语义：
+但 DSH `0.2.0-rc.2` 没有一个“跨顶层 Session 通信”的单一公共 API，也没有 Codex 同名的线程管理协议。因此它不是几行代码调用一个现成接口，而是插件自己组合并负责以下语义：
 
 - 哪些 Session 可以被列出，哪些 subagent Session 必须排除；
 - 读取历史时不意外唤醒目标；
@@ -247,7 +246,7 @@ Agent 实际调用的工具是：
 
 插件通过官方 Commands、Session、LLM、Attachment 和 Compaction 服务实现持久化替换，没有修改 DSH UI，也没有绕过模型的图片输入检查。不过 `/compact-img` 的目标选择、含图 span 识别和提示词是本插件定义的行为，不是 DSH 内置 `/compact` 的官方模式。
 
-`0.1.1-rc.2` 内置 `/compact` 已经能够把所选历史中的图片引用交给真正支持图片的摘要模型；`0.1.0-rc.6` 也已经具备这条基础能力。它的选区由上下文保留策略决定，主要压缩较老历史，不保证清除近期或全部图片。因此，只需要降低上下文长度时优先使用官方 `/compact`；需要清除当前 surface 的所有图片后切换到纯文本模型时，才使用 `/compact-img`。
+`0.2.0-rc.2` 内置 `/compact` 已经能够把所选历史中的图片引用交给真正支持图片的摘要模型；`0.2.0-rc.2` 也已经具备这条基础能力。它的选区由上下文保留策略决定，主要压缩较老历史，不保证清除近期或全部图片。因此，只需要降低上下文长度时优先使用官方 `/compact`；需要清除当前 surface 的所有图片后切换到纯文本模型时，才使用 `/compact-img`。
 
 如果模型请求返回 `AUTH`、`QUOTA`、取消或达到输出上限，插件会优先显示真实错误，不再把这些快速失败误报成“没有生成文本”。
 
@@ -259,22 +258,22 @@ Agent 实际调用的工具是：
 git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm build
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web install
-npx @deepseek-ai/dsh@0.1.1-rc.2 web
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web install
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
 本地 link 通常不需要重新执行 `add`；重新构建并运行 Profile 的 `install` 可以同步依赖。如果某个插件被从 Profile 中移除过，再单独执行对应的 `add`。
 
-不要在未验证的情况下直接升级 DSH 主版本。Worktree 构建脚本会校验官方 Workspace bundle 的 SHA-256；版本不匹配时会明确失败，目的是防止把 `0.1.1-rc.2` 的代码变换错误地应用到其他版本。
+不要在未验证的情况下直接升级 DSH 主版本。Worktree 构建脚本会校验官方 Workspace bundle 的 SHA-256；版本不匹配时会明确失败，目的是防止把 `0.2.0-rc.2` 的代码变换错误地应用到其他版本。
 
 ## 七、卸载
 
 按需执行：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-worktree
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-session-coordination
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-compact-img
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-worktree
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-session-coordination
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-compact-img
 ```
 
 然后重启 DSH Web。卸载行为如下：
@@ -285,26 +284,26 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-compact-img
 
 确认三个插件都卸载且不再需要本地源码后，才能删除这个仓库目录。
 
-## 八、与 DSH `0.1.1-rc.2` 官方扩展机制的偏差
+## 八、与 DSH `0.2.0-rc.2` 官方扩展机制的偏差
 
 ### 符合官方方式的部分
 
-- 三个包都通过 `package.json` 的 `dsh.bundle.patch` 和 `cordis.patch.yml` 安装到 Profile。
+- 五个包都通过 `package.json` 的 `dsh.bundle.patch` 和 `cordis.patch.yml` 安装到 Profile。
 - Host 功能通过 Cordis Service、依赖注入、effect 生命周期和工具/命令注册实现。
 - Session 通信写入正式 Session 事件日志；图片压缩使用正式 compaction replacement 事件；模型可见内容可从日志重建。
-- 三个插件可以独立安装，没有人为制造总插件运行时依赖。
+- 五个插件可以独立安装，没有人为制造总插件运行时依赖。
 
 ### 当前接受的兼容实现
 
-1. **Worktree 浏览器 UI 不是纯附加扩展。** `0.1.1-rc.2` 没有公开的 Session 行右键菜单扩展点，因此插件禁用官方 `ui-workspace` 行，基于校验和锁定的官方 `0.1.1-rc.2` Workspace 编译产物生成兼容版本，保留官方“分叉会话”，再加入“在新工作树中继续”、右键入口和 Worktree 投影。这是当前最大的升级风险。
+1. **Worktree 浏览器 UI 不是纯附加扩展。** `0.2.0-rc.2` 已提供 Session 菜单 slot，插件通过该 slot 添加“在新工作树中继续”，保留官方“分叉会话”。Worktree 投影与待创建列表仍基于校验和锁定的官方 Workspace 编译产物生成，因此需要替换官方 `ui-workspace` 行。这是当前最大的升级风险。
 2. **“同一项目”是浏览器投影。** DSH 的 Workspace 以规范化 cwd 为身份，Worktree 使用不同目录，所以 Host 内部必然是另一个 Workspace。插件在浏览器中把它投影到源项目下，但项目级排序、移动、删除等边缘操作不等价于真正的一等 Project→Worktree 模型。
 3. **Worktree Remote 描述符目前手写。** 服务使用官方 Typert Remote 基类，但 descriptor 和 codec 没有走完整的 `@Remote` 生成流水线，升级协议时需要人工核对。
 4. **配置校验没有完整 Schemastery 表面。** Worktree 的路径和数值会在加载时手工校验，但尚未提供官方文档建议的同名 `Config` Schema 和设置界面。
 5. **跨 Session 协议由插件维护。** 官方提供组成它所需的底层服务，但没有 Codex 等价的一体化顶层 Session 通信接口；冷唤醒、路由恢复、等待和历史派生规则需要随 Host 生命周期变化重新验证。
-6. **仓库暂时只支持源码链接安装。** 仓库根不是 Bundle，三个子包也没有面向 Git URL 安装的 `prepare` 发布流程，因此不能把 `github:big91987/dsh-plugins` 当作一个插件直接安装。当前支持方式是克隆、构建后分别添加三个子目录。
-7. **`dsh.compatibility.host` 只是声明信息。** `0.1.1-rc.2` 的 Profile 加载器不会根据这个字段自动阻止不兼容版本，真正保护主要来自固定依赖版本、测试和 Worktree bundle 校验和。
+6. **仓库暂时只支持源码链接安装。** 仓库根不是 Bundle，五个子包也没有面向 Git URL 安装的 `prepare` 发布流程，因此不能把 `github:big91987/dsh-plugins` 当作一个插件直接安装。当前支持方式是克隆、构建后分别添加所需子目录。
+7. **`dsh.compatibility.host` 只是声明信息。** `0.2.0-rc.2` 的 Profile 加载器不会根据这个字段自动阻止不兼容版本，真正保护主要来自固定依赖版本、测试和 Worktree bundle 校验和。
 
-这些偏差是为了先满足个人和同事在固定 `0.1.1-rc.2` 环境中的实际使用。后续如果需要面向更广泛用户发布，应优先等待或推动官方 Session 行 action 扩展点，再把三个子包分别标准化发布。
+这些偏差是为了先满足个人和同事在固定 `0.2.0-rc.2` 环境中的实际使用。后续如果需要面向更广泛用户发布，应进一步减少对官方 Workspace 编译产物的变换，再把子包分别标准化发布。
 
 ## 九、排查
 
@@ -312,8 +311,8 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove dsh-compact-img
 
 ```sh
 pnpm build
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web install
-npx @deepseek-ai/dsh@0.1.1-rc.2 web
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web install
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
 同时确认仓库路径没有变化，并检查：
@@ -329,7 +328,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 web
 - 确认源 Session 有工作目录，而且位于 Git 仓库内。
 - 执行 `git status` 和 `git worktree list` 检查仓库状态。
 - 检查 `$DSH_HOME/worktrees` 或 `~/.dsh/worktrees` 的写权限。
-- 如果刚升级过 DSH，先回到 `0.1.1-rc.2` 验证，不要绕过 bundle 校验和。
+- 如果刚升级过 DSH，先回到 `0.2.0-rc.2` 验证，不要绕过 bundle 校验和。
 
 ### Session 收到消息但不回复
 
@@ -361,3 +360,13 @@ pnpm --filter dsh-compact-img test
 ```
 
 DeepSeek Harness 官方源码仓库在这个项目中只作为行为和接口参考；插件代码、提交和发布只发生在本仓库。
+
+## 升级到 DSH 0.2
+
+当前源码固定适配 DSH `0.2.0-rc.2` / Cordis `4.0.4`，不兼容旧的 0.1 运行时。等待在途任务结束后停止 DSH，先备份 Sessions 和 profile 的 manifest/lockfile，再更新源码、安装锁定依赖并重建。通过官方 `plugin --profile <name> add <package-directory>` 刷新链接包，随后用新版 DSH 启动该 profile。任务看板保留 v2 账本；新旧 Host 不得同时写同一个账本。旧 Session 迁移见 [历史兼容说明](plugins/dsh-session-coordination/docs/history-migration.md)。
+
+## 开发与验证
+
+使用锁定的 pnpm 版本执行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm test` 和 `pnpm build`。根测试入口关闭 Node 的实验性 Web Storage，避免其全局对象覆盖 jsdom 的存储；不影响插件运行或真实 Session 数据。通过隔离的 `DSH_HOME` 执行 `scripts/probe-profile.sh` 验证安装与卸载。
+
+默认安装示例保留 Worktree、会话协作、图片压缩和浏览器预览。任务看板是可选插件：仅在确实需要时单独添加 `plugins/dsh-project-task-board`，升级不会替你重新启用已卸载的看板。

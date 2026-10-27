@@ -2,6 +2,8 @@
 
 English | [中文](README.zh.md)
 
+Targets DSH `0.2.0-rc.2` and Cordis `~4.0.4`.
+
 An independent fork of `@linxin666/dsh-client-ui-task-board@0.3.6` that adds project switching to its Host-authoritative task ledger, real DSH session execution, Host cron scheduling, and optional cross-platform idle-sleep protection. It is mounted through `cordis.patch.yml` and does not modify DSH or the upstream plugin.
 
 - The browser is an asynchronous view; closing the page does not stop Host scheduling or execution settlement.
@@ -25,7 +27,7 @@ An independent fork of `@linxin666/dsh-client-ui-task-board@0.3.6` that adds pro
 
 ## Architecture and protocol
 
-- `src/index.ts` mounts the Host service through the official `@deepseek-ai/dsh-host-apiproxy` and `@deepseek-ai/dsh-host-webserver` SDKs.
+- `src/index.ts` uses `sessionController`, `workspaceRegistry`, and `agentPresets` to validate pins and execute through the official `@deepseek-ai/dsh-api-session-controller` and `@deepseek-ai/dsh-host-webserver` SDKs.
 - `src/host-ledger.ts` serializes actions and persists `{ schemaVersion: 2, revision, tasks, scheduler, recentRequests }` through a temporary file plus atomic rename.
 - `src/host-service.ts` owns cron ticks, missed-trigger skipping, runner launch, restart reconciliation, and power reasons.
 - `src/client/host-api.ts` imports legacy browser data once, submits idempotent actions, and treats Host snapshots as the only confirmed UI state.
@@ -37,9 +39,11 @@ An independent fork of `@linxin666/dsh-client-ui-task-board@0.3.6` that adds pro
 The fork and upstream package share `$DSH_HOME/task-board/ledger-v2.json` and the same Host routes, so they must not be installed together. Remove the upstream package, add this source package, and restart `dsh web`:
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
 ```
+
+Rebuild this package with `pnpm --filter dsh-project-task-board build` before installation or upgrade. Existing installations can remove and re-add this source package through the same CLI and restart the Host; the v2 ledger, request fingerprints, and browser rollback data retain their existing formats. The client settings page follows the `ui-project-task-board` Host entry through the official ConfigForm service, and accepted configuration writes restart its Host fiber. Running executions with recorded session ids resume observation after restart; interrupted starts without session ids are cancelled without resend.
 
 Removing either package does not delete the ledger. Back up `~/.dsh/task-board/ledger-v2.json` before switching installations.
 

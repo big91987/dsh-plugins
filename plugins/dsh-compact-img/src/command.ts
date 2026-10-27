@@ -13,14 +13,20 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import type { CommandDefinition, CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
-import { CompactionId } from '@deepseek-ai/dsh-compaction'
-import { createUserMessage, BlockAssembler, LlmError } from '@deepseek-ai/dsh-llm'
+import type { CommandDefinition, CommandId, CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
+import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
+import { createUserMessage, BlockAssembler, LlmError, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, FinishReason, Message } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { findImageSpans, expandToBalancedSpan } from './spans.ts'
 import { compactImgErrorText } from './error.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'compact-img': { kind: 'compact-img' }
+  }
+}
 
 /** Token cap for the image-description request. */
 const SUMMARY_MAX_TOKENS = 4096
@@ -101,11 +107,11 @@ async function describeSpan(
   const header = session.requestHeader()
   const messages: Message[] = [
     ...shadowedSeqs
-      .map(seq => session.deriveEventMessage(session.events[seq]!))
+      .map(seq => session.deriveEventMessage(session.eventAt(SessionSeq(seq))!))
       .filter((message): message is Message => message !== null),
     createUserMessage({
       content: [{ type: 'text', text: CHECKPOINT_INSTRUCTION }],
-      source: { kind: 'plugin', plugin: 'dsh-compact-img' },
+      source: { kind: 'compact-img' },
     }),
   ]
   const assembler = new BlockAssembler()
@@ -155,30 +161,35 @@ async function replaceSpanWithCheckpoint(
   text: string,
   provider: string,
   model: string,
+  sourceCommandId: CommandId,
 ): Promise<number> {
   const compactionId = CompactionId(randomUUID())
-  const startEvent = session.append('compaction/start', { compactionId, turn: null })
-  const checkpointMessage = createUserMessage({
-    content: [
-      { type: 'text', text: `${CHECKPOINT_PREAMBLE}\n\n${text}` },
-    ],
-    source: { kind: 'plugin', plugin: 'dsh-compact-img' },
-  })
-  const summaryEvent = session.append('compaction/summary', {
-    compactionId,
-    summary: [{ type: 'text', text }],
-    shadowedRange: { start, end },
-    shadowedSeqs: [...shadowedSeqs],
-    shadowedTokenCount: 0,
-    provider,
-    model,
-    maxTokens: SUMMARY_MAX_TOKENS,
-  })
-  session.append('user/message', checkpointMessage, {
-    surfaceOp: { op: 'replace', start, end },
-    sourceEventSeqs: [startEvent.seq, summaryEvent.seq, ...shadowedSeqs],
-  })
-  session.append('compaction/end', { compactionId, turn: null })
+  const lifecycle = { compactionId, turn: null, sourceCommandId }
+  const startEvent = session.append('compaction/start', lifecycle)
+  try {
+    const checkpointMessage = createUserMessage({
+      content: [{ type: 'text', text: `${CHECKPOINT_PREAMBLE}\n\n${text}` }],
+      source: compactCheckpointSource(compactionId, sourceCommandId),
+    })
+    const summaryEvent = session.append('compaction/summary', {
+      compactionId, sourceCommandId,
+      summary: [{ type: 'text', text }],
+      shadowedRange: { start: SessionSeq(start), end: SessionSeq(end) },
+      shadowedSeqs: shadowedSeqs.map(SessionSeq),
+      shadowedTokenCount: 0,
+      provider,
+      model,
+      maxTokens: SUMMARY_MAX_TOKENS,
+    })
+    session.append('user/message', checkpointMessage, {
+      surfaceOp: { op: 'replace', startSeq: SessionSeq(start), endSeq: SessionSeq(end) },
+      sourceEventSeqs: [startEvent.seq, summaryEvent.seq, ...shadowedSeqs.map(SessionSeq)],
+    })
+  } catch (error) {
+    session.append('compaction/end', { ...lifecycle, error: errorChain(error) })
+    throw error
+  }
+  session.append('compaction/end', lifecycle)
   return shadowedSeqs.length
 }
 
@@ -201,7 +212,11 @@ async function executeCompactImg(
     for (const span of spans) {
       const range = expandToBalancedSpan(session, span)
       if (range === null) continue
-      const shadowed = span.seqs
+      const nodes = [...session.surface.nodes]
+      const startIndex = nodes.indexOf(SessionSeq(range.start))
+      const endIndex = nodes.indexOf(SessionSeq(range.end))
+      if (startIndex < 0 || endIndex < startIndex) throw new Error('image span is no longer visible')
+      const shadowed = nodes.slice(startIndex, endIndex + 1)
       const { text, provider, model } = await describeSpan(
         ctx,
         session,
@@ -217,6 +232,7 @@ async function executeCompactImg(
         text,
         provider,
         model,
+        invocation.commandId,
       )
     }
     return {

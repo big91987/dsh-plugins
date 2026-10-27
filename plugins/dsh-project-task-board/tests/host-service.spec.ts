@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import type { HostExecutionServices as ApiProxy } from '../src/host-runner.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HostTaskLedger } from '../src/host-ledger.ts'
 import { TaskBoardHostService } from '../src/host-service.ts'
@@ -16,8 +16,8 @@ function root(): string {
   return value
 }
 
-function ok<T>(request: { rpcId: unknown }, value: T) {
-  return { rpcId: request.rpcId, result: { ok: true as const, value } }
+function ok<T>(request: unknown, value: T) {
+  return value
 }
 
 afterEach(() => {
@@ -38,7 +38,7 @@ describe('TaskBoardHostService scheduling without a browser', () => {
     const api = {
       sessions: {
         create,
-        rename: async (request: { rpcId: unknown }) => ok(request, { title: 'Scheduled', seq: 1 }),
+        rename: async (request: unknown) => ok(request, { title: 'Scheduled', seq: 1 }),
         prompt,
       },
     } as unknown as ApiProxy
@@ -57,6 +57,25 @@ describe('TaskBoardHostService scheduling without a browser', () => {
     await (service as unknown as { tickSchedule(first: boolean): Promise<void> }).tickSchedule(false)
     expect(create).toHaveBeenCalledOnce()
     service.dispose()
+  })
+
+  it('holds ledger ownership through an in-flight launch before configuration restart disposal', async () => {
+    const ledger = new HostTaskLedger(root())
+    ledger.applyRequest('create', { kind: 'create', id: 'a', input: { title: 'A', description: '', prompt: 'work' } })
+    let release!: (value: { sessionId: string }) => void
+    const creation = new Promise<{ sessionId: string }>(resolve => { release = resolve })
+    const power = new PowerInhibitor({ platform: 'aix' })
+    const service = new TaskBoardHostService({ sessions: { create: async () => creation, rename: async () => ({}), prompt: async () => ({ accepted: true }) } } as unknown as ApiProxy, { ledger, power })
+    service.setConfiguration(true, true)
+    const unlock = vi.spyOn(ledger, 'dispose')
+    service.apply('run', { kind: 'run', taskId: 'a' })
+    const shutdown = service.dispose()
+    expect(unlock).not.toHaveBeenCalled()
+    release({ sessionId: 'session-a' })
+    await shutdown
+    expect(ledger.state().tasks[0].executions[0].sessionId).toBe('session-a')
+    expect(unlock).toHaveBeenCalledOnce()
+    expect(power.snapshot().enabled).toBe(false)
   })
 
   it('does not launch an imported archived task with a legacy enabled schedule', async () => {
@@ -151,9 +170,10 @@ describe('TaskBoardHostService scheduling without a browser', () => {
     ledger.applyRequest('import', { kind: 'import', sourceId: 'browser', tasks: [imported] })
     const api = {
       sessions: {
-        list: async (request: { rpcId: unknown }) => ok(request, { items: [{ sessionId: 'session-a', running: false }] }),
-        history: async (request: { rpcId: unknown }) => ok(request, {
-          events: [{ event: { type: 'turn/end', seq: 10, time: 1_200, data: { reason: { kind: 'complete' } } } }],
+        list: async (request: unknown) => ok(request, { items: [{ sessionId: 'session-a', running: false }] }),
+        follow: async function* () { yield { type: 'snapshot', cursor: 10, records: [{ event: { type: 'turn/end', seq: 10, time: 1_200, data: { reason: { kind: 'complete' } } } }] } },
+        page: async (request: unknown) => ok(request, {
+          records: [{ event: { type: 'turn/end', seq: 10, time: 1_200, data: { reason: { kind: 'complete' } } } }],
           hasMore: false,
         }),
       },
@@ -185,7 +205,7 @@ describe('TaskBoardHostService scheduling without a browser', () => {
 
 describe('TaskBoardHostService poll heartbeat', () => {
   function sessionsList(items: Array<{ sessionId: string; running: boolean }>) {
-    return { sessions: { list: async (request: { rpcId: unknown }) => ok(request, { items }) } } as unknown as ApiProxy
+    return { sessions: { list: async (request: unknown) => ok(request, { items }) } } as unknown as ApiProxy
   }
 
   it('does not push SSE frames while the session and power snapshots stay unchanged', async () => {
@@ -208,7 +228,7 @@ describe('TaskBoardHostService poll heartbeat', () => {
   it('pushes an SSE frame when the running-session count changes', async () => {
     let items: Array<{ sessionId: string; running: boolean }> = []
     const service = new TaskBoardHostService({
-      sessions: { list: async (request: { rpcId: unknown }) => ok(request, { items }) },
+      sessions: { list: async (request: unknown) => ok(request, { items }) },
     } as unknown as ApiProxy, {
       ledger: new HostTaskLedger(root()),
       power: new PowerInhibitor({ platform: 'linux' }),
@@ -249,12 +269,12 @@ describe('TaskBoardHostService poll heartbeat', () => {
       executions: opened.executions.map(execution => ({ ...execution, sessionId: 'session-a' })),
     }
     ledger.applyRequest('import', { kind: 'import', sourceId: 'browser', tasks: [imported] })
-    const list = vi.fn(async (request: { rpcId: unknown }) => ok(request, { items: [{ sessionId: 'session-a', running: false }] }))
-    const history = vi.fn(async (request: { rpcId: unknown }) => ok(request, {
-      events: [{ event: { type: 'turn/end', seq: 10, time: 1_200, data: { reason: { kind: 'complete' } } } }],
+    const list = vi.fn(async (request: unknown) => ok(request, { items: [{ sessionId: 'session-a', running: false }] }))
+    const page = vi.fn(async (request: unknown) => ok(request, {
+      records: [{ event: { type: 'turn/end', seq: 10, time: 1_200, data: { reason: { kind: 'complete' } } } }],
       hasMore: false,
     }))
-    const service = new TaskBoardHostService({ sessions: { list, history } } as unknown as ApiProxy, {
+    const service = new TaskBoardHostService({ sessions: { list, page, follow: async function* () { const value = await page({}); yield { type: 'snapshot', records: value.records, cursor: 1000 } } } } as unknown as ApiProxy, {
       ledger,
       power: new PowerInhibitor({ platform: 'linux' }),
     })
@@ -262,7 +282,7 @@ describe('TaskBoardHostService poll heartbeat', () => {
     expect(ledger.state().tasks[0].executions[0].result).toBe('succeeded')
     expect(list).toHaveBeenCalledOnce()
     // One one-message head probe plus the single scan page.
-    expect(history).toHaveBeenCalledTimes(2)
+    expect(page).toHaveBeenCalledTimes(2)
     service.dispose()
   })
 
@@ -290,7 +310,7 @@ describe('TaskBoardHostService poll heartbeat', () => {
       }],
     })
     let sessionStateAvailable = false
-    const list = vi.fn(async (request: { rpcId: unknown }) => {
+    const list = vi.fn(async (request: unknown) => {
       if (!sessionStateAvailable) throw new Error('temporary list failure')
       return ok(request, { items: [{ sessionId: 'session-open', running: true }] })
     })

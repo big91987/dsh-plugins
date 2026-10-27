@@ -1,25 +1,19 @@
-import type { ApiProxy, RpcId } from '@deepseek-ai/dsh-host-apiproxy'
+import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
+import type { SessionSummary, SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { WorkspaceRegistry, WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import type { AgentPresetRegistry } from '@deepseek-ai/dsh-agent-preset-registry'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { TaskRecord } from './core/tasks.ts'
 
-function request<T>(payload: T) {
-  return { rpcId: `task-board-${crypto.randomUUID()}` as RpcId, payload }
+/** Narrow Host business services; these are the official controller/registry faces. */
+export interface HostExecutionServices {
+  sessions: Pick<SessionController, 'create' | 'rename' | 'prompt' | 'list' | 'follow' | 'page'>
+  workspace: Pick<WorkspaceRegistry, 'list'>
+  agentPresets: Pick<AgentPresetRegistry, 'list'>
 }
-
-function failure(error: { code: string; message: string }): Error {
-  return new Error(`${error.code}: ${error.message}`)
-}
-
-/** One session-list row, extracted from the sessions.list RPC result. */
-export type SessionSummary = Extract<
-  Awaited<ReturnType<ApiProxy['sessions']['list']>>['result'],
-  { ok: true }
->['value']['items'][number]
-
-type ExecutionSessionId = Extract<
-  Awaited<ReturnType<ApiProxy['sessions']['create']>>['result'],
-  { ok: true }
->['value']['sessionId']
+export type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/types'
+type ExecutionSessionId = SessionId
 
 export interface SessionCommandDispatcher {
   execute(
@@ -59,46 +53,42 @@ export class HostExecutionRunner {
   private readonly scanMemos = new Map<string, number>()
 
   constructor(
-    private readonly api: ApiProxy,
+    private readonly api: HostExecutionServices,
     private readonly commands?: SessionCommandDispatcher,
   ) {}
 
   async launch(task: TaskRecord): Promise<string> {
     if (task.workspaceId !== undefined) {
-      const workspaces = await this.api.workspace.list(request({}))
-      if (!workspaces.result.ok) throw failure(workspaces.result.error)
-      if (!workspaces.result.value.items.some(item => item.workspaceId === task.workspaceId)) {
+      const workspaces = this.api.workspace.list()
+      if (!workspaces.some(item => item.id === task.workspaceId)) {
         throw new Error(`workspace not found: ${task.workspaceId}`)
       }
     }
     if (task.mode !== undefined) {
-      const presets = await this.api.agentPresets.list(request({}))
-      if (!presets.result.ok) throw failure(presets.result.error)
-      const preset = presets.result.value.presets.find(item => item.id === task.mode)
+      const presets = await this.api.agentPresets.list()
+      const preset = presets.find(item => item.id === task.mode)
       if (preset === undefined) throw new Error(`agent preset not found: ${task.mode}`)
       if (preset.broken !== undefined) throw new Error(`agent preset is unavailable: ${preset.broken}`)
     }
-    const created = await this.api.sessions.create(request({
-      ...(task.workspaceId === undefined ? {} : { workspaceId: task.workspaceId as never }),
+    const created = await this.api.sessions.create({
+      ...(task.workspaceId === undefined ? {} : { workspaceId: task.workspaceId as WorkspaceId }),
       ...(task.mode === undefined ? {} : { agentPreset: task.mode }),
-    }))
-    if (!created.result.ok) throw failure(created.result.error)
-    const sessionId = created.result.value.sessionId
+    })
+    const sessionId = created.sessionId
     try {
-      const renamed = await this.api.sessions.rename(request({ sessionId, title: task.title }))
-      if (!renamed.result.ok) throw failure(renamed.result.error)
+      await this.api.sessions.rename({ sessionId, title: task.title })
       if (task.permission !== undefined) {
         if (this.commands === undefined) throw new Error('permission command dispatcher is unavailable')
         const command = await this.commands.execute(sessionId, `/permission ${task.permission}`, AbortSignal.timeout(30_000))
         if (command === undefined) throw new Error('permission command was not acknowledged')
         if (command.kind !== 'success') throw new Error(command.text ?? 'permission command failed')
       }
-      const prompt = await this.api.sessions.prompt(request({
+      await this.api.sessions.prompt({
+        requestId: `task-board-${crypto.randomUUID()}` as SessionRequestId,
         sessionId,
         mode: 'queue' as const,
         content: [{ type: 'text' as const, text: task.prompt !== '' ? task.prompt : task.title }],
-      }))
-      if (!prompt.result.ok) throw failure(prompt.result.error)
+      }, AbortSignal.timeout(30_000))
     } catch (error) {
       throw new SessionLaunchError(sessionId, error)
     }
@@ -107,10 +97,8 @@ export class HostExecutionRunner {
 
   async listRunning(): Promise<{ known: true; count: number; items: SessionSummary[] } | { known: false }> {
     try {
-      const response = await this.api.sessions.list(request({}))
-      return response.result.ok
-        ? { known: true, count: response.result.value.items.filter(item => item.running).length, items: response.result.value.items }
-        : { known: false }
+      const response = await this.api.sessions.list({}, AbortSignal.timeout(30_000))
+      return { known: true, count: response.items.filter(item => item.running).length, items: [...response.items] }
     } catch {
       return { known: false }
     }
@@ -127,9 +115,8 @@ export class HostExecutionRunner {
     if (sessions !== undefined) {
       items = sessions
     } else {
-      const response = await this.api.sessions.list(request({}))
-      if (!response.result.ok) return { outcome: 'pending' }
-      items = response.result.value.items
+      const response = await this.api.sessions.list({}, AbortSignal.timeout(30_000))
+      items = response.items
     }
     const summary = items.find(item => item.sessionId === sessionId)
     if (summary === undefined) {
@@ -140,33 +127,44 @@ export class HostExecutionRunner {
     // Probe the newest event before paging: SessionSummary.updatedAt tracks
     // human prompts, not event appends, so only the history head proves
     // whether a re-scan could find anything new.
-    const probe = await this.api.sessions.history(request({ sessionId: summary.sessionId, maxMessages: 1 }))
-    if (!probe.result.ok) return { outcome: 'pending' }
-    const newestSeq = probe.result.value.events.reduce<number | undefined>((newest, entry) => {
-      const seq = entry.event.seq
-      return typeof seq !== 'number' ? newest : newest === undefined ? seq : Math.max(newest, seq)
-    }, undefined)
+    const lifetime = new AbortController()
+    const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(30_000)])
+    const address = { kind: 'session' as const, sessionId: summary.sessionId }
+    let probe: Extract<import('@deepseek-ai/dsh-api-session-controller/types').SessionFollowFrame, { type: 'snapshot' }> | undefined
+    try {
+      for await (const frame of this.api.sessions.follow({ address, maxMessages: 1 }, signal)) {
+        if (frame.type !== 'snapshot') return { outcome: 'pending' }
+        probe = frame
+        break
+      }
+    } catch { return { outcome: 'pending' } }
+    finally { lifetime.abort() }
+    if (probe === undefined) return { outcome: 'pending' }
+    // The opening cursor is the durable log watermark even when projection
+    // records omit a newer ignorable event; it fences both paging and memo reuse.
+    const newestSeq = probe.cursor
     if (newestSeq !== undefined && this.scanMemos.get(sessionId) === newestSeq) return { outcome: 'pending' }
     const events: Array<{ event: { type: string; seq?: number; time?: number; data: unknown } }> = []
     let beforeSeq: number | undefined
     let reachedExecutionBoundary = false
     for (let page = 0; page < 100; page += 1) {
-      const history = await this.api.sessions.history(request({
-        sessionId: summary.sessionId,
-        maxMessages: 100,
-        ...(beforeSeq === undefined ? {} : { beforeSeq }),
-      }))
-      if (!history.result.ok) return { outcome: 'pending' }
-      events.push(...history.result.value.events)
-      const oldestTime = history.result.value.events.reduce<number | undefined>((oldest, entry) => {
+      let history: import('@deepseek-ai/dsh-api-session-controller/types').SessionPage
+      try {
+        history = await this.api.sessions.page({
+          address, throughSeq: probe.cursor, maxMessages: 100,
+          ...(beforeSeq === undefined ? {} : { beforeSeq }),
+        }, AbortSignal.timeout(30_000))
+      } catch { return { outcome: 'pending' } }
+      events.push(...history.records)
+      const oldestTime = history.records.reduce<number | undefined>((oldest, entry) => {
         const time = entry.event.time
         return typeof time !== 'number' ? oldest : oldest === undefined ? time : Math.min(oldest, time)
       }, undefined)
-      if (!history.result.value.hasMore || (oldestTime !== undefined && oldestTime <= startedAt)) {
+      if (!history.hasMore || (oldestTime !== undefined && oldestTime <= startedAt)) {
         reachedExecutionBoundary = true
         break
       }
-      const oldestSeq = history.result.value.events.reduce<number | undefined>((oldest, entry) => {
+      const oldestSeq = history.records.reduce<number | undefined>((oldest, entry) => {
         const seq = entry.event.seq
         return typeof seq !== 'number' ? oldest : oldest === undefined ? seq : Math.min(oldest, seq)
       }, undefined)

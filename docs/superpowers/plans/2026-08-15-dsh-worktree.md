@@ -10,7 +10,7 @@
 
 ## Constraints
 
-- `/Users/zhaojiuzhou/work/deepseek-harness` is read-only migration evidence.
+- `<upstream-reference>` is read-only migration evidence.
 - `dsh-worktree` must install without `dsh-session-coordination`.
 - The source checkout and source Git index must remain byte-for-byte unchanged by Worktree creation and snapshotting.
 - Managed checkout deletion accepts a managed identity, never an arbitrary path.

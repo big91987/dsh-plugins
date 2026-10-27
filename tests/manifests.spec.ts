@@ -15,7 +15,7 @@ for (const name of ['dsh-worktree', 'dsh-session-coordination', 'dsh-project-tas
       expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
       expect(manifest.files).toContain('cordis.patch.yml')
       if (name === 'dsh-project-task-board') {
-        expect(manifest.dsh?.compatibility?.host).toBe('0.1.1-rc.2')
+        expect(manifest.dsh?.compatibility?.host).toBe('0.2.0-rc.2')
       }
     })
   })

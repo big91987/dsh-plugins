@@ -1,6 +1,6 @@
 # Third-party notices
 
-The packaged browser client is derived from `@deepseek-ai/dsh-client-ui-workspace@0.1.1-rc.2`.
+The packaged browser client is derived from `@deepseek-ai/dsh-client-ui-workspace@0.2.0-rc.2`.
 
 MIT License
 

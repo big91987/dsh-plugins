@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Modify only `/Users/zhaojiuzhou/work/dsh-plugins`; the DeepSeek Harness checkout remains reference-only.
+- Modify only `<plugin-repository>`; the DeepSeek Harness checkout remains reference-only.
 - Preserve the existing commit history and all current intended Worktree fixes.
 - Target `@deepseek-ai/dsh@0.1.0-rc.6`; do not claim compatibility with later releases.
 - Publish to the public repository `big91987/dsh-plugins` as `main`.

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 describe('dsh-worktree package contract', () => {
-  it('pins the 0.1.1-rc.2 host and replaces only the built-in Workspace row', async () => {
+  it('pins the 0.2.0-rc.2 host and replaces only the built-in Workspace row', async () => {
     const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
       dsh?: {
         bundle?: { patch?: string }
@@ -15,7 +15,7 @@ describe('dsh-worktree package contract', () => {
     expect(manifest.dsh).toMatchObject({
       bundle: { patch: './cordis.patch.yml' },
       client: { platform: 'web' },
-      compatibility: { host: '0.1.1-rc.2' },
+      compatibility: { host: '0.2.0-rc.2' },
     })
     expect(patch).toMatch(/^- id: ui-workspace\n  disabled: true$/m)
     expect(patch).toMatch(/^- insert:\n    - id: dsh-worktree\n      name: dsh-worktree$/m)

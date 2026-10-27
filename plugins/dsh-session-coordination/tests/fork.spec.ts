@@ -36,8 +36,9 @@ describe('SessionCoordination fork', () => {
 
     expect(result.threadId).toMatch(/^session-/)
     expect(ctx.agents.create).toHaveBeenCalledWith(expect.objectContaining({
-      seed: events.slice(0, 3),
-      meta: expect.objectContaining({ cwd: '/repo', parentSession: source.id, seedLength: 3 }),
+      seed: [...events.slice(0, 3), expect.objectContaining({ type: 'session/end-seed', data: { inherited: true } })],
+      inheritedEventCount: 3,
+      meta: expect.objectContaining({ cwd: '/repo', parentSession: source.id, isSeeded: true }),
     }))
     expect(attachSession).toHaveBeenCalledWith(result.threadId)
   })

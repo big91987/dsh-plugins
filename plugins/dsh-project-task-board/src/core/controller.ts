@@ -30,7 +30,7 @@ export interface TaskBoardTransport {
 /** The sessions face the controller needs for navigation awareness. */
 export interface SessionsControllerFace {
   list: {
-    getSnapshot(): { current: string | undefined }
+    getSnapshot(): unknown
     subscribe(fn: () => void): () => void
   }
   /** Select a session as current (navigates the conversation view). */

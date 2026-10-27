@@ -6,7 +6,7 @@
  * @module dsh-compact-img/spans
  */
 
-import type { Session } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type Session } from '@deepseek-ai/dsh-session'
 import { toolPairingBalancedBefore, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'
 import { contentHasImage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -23,11 +23,11 @@ export interface ImageSpan {
 
 /**
  * Returns true when a session surface node's derived content carries an image.
- * Uses the same recursive `contentHasImage` walk the host image policy uses, so
- * nested tool-result images (a `read_image` tool result) are found.
+ * Tool-result messages carry their image blocks directly in the 0.2 content
+ * array, matching the host image policy.
  */
 export function nodeHasImage(session: Session, seq: number): boolean {
-  const event = session.events[seq]
+  const event = session.eventAt(SessionSeq(seq))
   if (event === undefined) return false
   const message = session.deriveEventMessage(event)
   if (message === null) return false
@@ -72,8 +72,8 @@ export function expandToBalancedSpan(
   span: ImageSpan,
 ): { start: number; end: number } | null {
   const nodes = [...session.surface.nodes]
-  const startIdx = nodes.indexOf(span.start)
-  const endIdx = nodes.lastIndexOf(span.end)
+  const startIdx = nodes.indexOf(SessionSeq(span.start))
+  const endIdx = nodes.lastIndexOf(SessionSeq(span.end))
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return null
 
   let lo = startIdx
@@ -97,12 +97,7 @@ function spanOf(seqs: number[]): ImageSpan {
   return { start: seqs[0]!, end: seqs[seqs.length - 1]!, seqs: Object.freeze([...seqs]) }
 }
 
-/** Count image blocks nested in content (used for reporting). */
+/** Count image blocks in the current message content contract. */
 export function countImagesInBlocks(blocks: readonly ContentBlock[]): number {
-  let count = 0
-  for (const block of blocks) {
-    if (block.type === 'image') count += 1
-    else if (block.type === 'tool-result') count += countImagesInBlocks(block.content)
-  }
-  return count
+  return blocks.filter(block => block.type === 'image').length
 }

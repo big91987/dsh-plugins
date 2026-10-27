@@ -9,10 +9,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-commands'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
-import z from 'schemastery'
+import type {} from '@deepseek-ai/dsh-settings'
+import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-host-apiproxy'
+import type {} from '@deepseek-ai/dsh-api-session-controller'
+import type {} from '@deepseek-ai/dsh-workspace'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { TaskBoardHostService } from './host-service.ts'
 import { makeTaskBoardRoutes } from './host-routes.ts'
@@ -24,17 +26,16 @@ const SECTION_ORDER = 200
 /** Default environment variable holding the authenticated proxy token. */
 export const DEFAULT_PROXY_TOKEN_ENV = 'DSH_TASK_BOARD_PROXY_TOKEN'
 
-export const inject = ['systemPrompt', 'apiProxy', 'webServer', 'agents', 'commands']
+export const inject = ['systemPrompt', 'sessionController', 'workspaceRegistry', 'agentPresets', 'webServer', 'agents', 'commands']
 
 /** Model-facing announcement: plugin presence, capabilities, and limits. */
 export const TASK_BOARD_GUIDANCE = '本机已安装 dsh-project-task-board 插件（DSH Web GUI 的项目任务看板）：侧边栏「任务看板」入口。能力：用一个全局看板管理任务，并按全部项目、未分配或具体工作区切换视图；Host 权威账本；关闭浏览器后仍由 Host 执行和结算；任务可钉住工作区、agent 预设和权限；支持 Host 本地时区的 5 段 cron，错过的触发点不补跑；可选且默认关闭的空闲系统睡眠保护允许屏幕熄灭，但不承诺拦截合盖、手动睡眠、休眠、关机或唤醒已睡眠机器。执行消耗 API 额度。用户提到「任务看板 / 看板 / 定时任务」时即指本插件，请据此协作。若你同时用 todo_write 维护会话顶部的可见计划列表，最终回复前必须再次调用 todo_write 收尾：没有剩余工作时不要保留 in_progress，已完成的最后一步要标为 completed。'
 
 /**
- * Settings namespace of the board's announcement capability — the section the
- * web settings surface edits. Spelled here rather than imported: the browser
- * half spells the same value and must not depend on a Host package.
+ * Host Loader entry id used by the DSH 0.2 configuration form. The bundle
+ * patch and browser form share this stable id.
  */
-export const TASK_BOARD_SETTINGS_NAMESPACE = settingsNamespace('task-board')
+export const TASK_BOARD_SETTINGS_NAMESPACE = 'ui-project-task-board'
 
 /** Plugin config, validated by the same-named schemastery schema. */
 export interface Config {
@@ -79,17 +80,15 @@ export function resolveProxyAccess(config: Config | undefined, env: NodeJS.Proce
 const DEFAULT_ANNOUNCE = false
 
 /**
- * Register the board's announcement section, gated on the composition entry's
- * `announceToAgent` (and the live settings value once the web settings
- * surface is served). The section is re-registered whenever the source
- * changes, so a settings edit takes effect without a restart.
+ * Register the board's Host service and opt-in announcement. DSH 0.2 applies
+ * configuration edits by restarting this fiber with the accepted Config.
  * @param ctx - the plugin context (systemPrompt injected).
  * @param config - resolved plugin config (schema defaults applied by the loader).
  */
 export const apply = mountOnce('dsh-project-task-board', applyImpl)
 
 function applyImpl(ctx: Context, config?: Config): void {
-  const host = new TaskBoardHostService(ctx.apiProxy, {
+  const host = new TaskBoardHostService({ sessions: ctx.sessionController, workspace: ctx.workspaceRegistry, agentPresets: ctx.agentPresets }, {
     commandDispatcher: {
       async execute(sessionId, line, signal) {
         const agent = ctx.agents.get(sessionId)
@@ -109,42 +108,17 @@ function applyImpl(ctx: Context, config?: Config): void {
       host.dispose()
       throw error
     }
-    return () => {
+    return async () => {
       for (const dispose of disposers) dispose()
-      host.dispose()
+      await host.dispose()
     }
   }, 'task-board: host ledger, scheduler, and routes')
-  // The live source the announcement reads: the settings section once the web
-  // settings surface is served, the composition entry otherwise
-  // (installSettingsSection swaps it when the namespace registers).
-  let current: () => Config = () => config ?? {}
-  let disposeSection: (() => void) | undefined
-
-  // Register (or drop) the announcement to match the current source. The
-  // section is kept under one disposer: re-registering first tears the old
-  // one down so a duplicate-name registration never throws.
-  const sync = (): void => {
-    if (disposeSection !== undefined) {
-      disposeSection()
-      disposeSection = undefined
-    }
-    const active = current().enabled ?? true
-    host.setConfiguration(active, current().preventIdleSleep ?? false)
-    if (!active) return
-    if ((current().announceToAgent ?? DEFAULT_ANNOUNCE) === false) return
-    disposeSection = ctx.systemPrompt.section({
-      name: 'plugin:task-board',
-      order: SECTION_ORDER,
-      text: TASK_BOARD_GUIDANCE,
-    })
+  // DSH 0.2 derives forms from the Loader entry's Config and restarts this
+  // fiber after accepted configuration edits; every restart releases routes,
+  // timers, and power helpers through the effect above before rebuilding.
+  if ((config?.enabled ?? true) && (config?.announceToAgent ?? DEFAULT_ANNOUNCE)) {
+    ctx.effect(() => ctx.systemPrompt.section({
+      name: 'plugin:task-board', order: SECTION_ORDER, text: TASK_BOARD_GUIDANCE,
+    }))
   }
-
-  installSettingsSection(ctx, TASK_BOARD_SETTINGS_NAMESPACE, Config, config ?? {}, {
-    setSource: (source) => { current = source },
-    onChange: sync,
-  })
-
-  // Initial registration from the composition entry (covers deployments with
-  // no settings service, whose installSettingsSection never fires its hooks).
-  sync()
 }

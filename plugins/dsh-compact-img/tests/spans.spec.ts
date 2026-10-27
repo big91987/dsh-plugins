@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { findImageSpans, expandToBalancedSpan, countImagesInBlocks, nodeHasImage } from '../src/spans.ts'
@@ -13,6 +13,7 @@ function fakeSession(events: Array<SessionEvent | undefined>): Session {
   })
   return {
     events,
+    eventAt: (seq: number) => events[seq],
     surface: { nodes, replaceGeneration: 0 },
     deriveEventMessage(event: SessionEvent): Message | null {
       if (event.type === 'user/message') return event.data as Message
@@ -53,14 +54,12 @@ function toolResultWithImage(seq: number): SessionEvent {
       step: 1,
       message: {
         role: 'tool',
-        content: [{
-          type: 'tool-result',
-          toolCallId: CallId(`call-${seq}`),
-          content: [
+        source: { kind: 'tool', callId: ToolCallId(`call-${seq}`) },
+        toolCallId: ToolCallId(`call-${seq}`),
+        content: [
             { type: 'text', text: 'read image' },
             { type: 'image', attachment: { attachmentId: AttachmentId(`a-${seq}`), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
-          ] as ContentBlock[],
-        }],
+        ] as ContentBlock[],
       },
     },
   } as unknown as SessionEvent
@@ -73,7 +72,7 @@ describe('nodeHasImage', () => {
     expect(nodeHasImage(session, 0)).toBe(false)
   })
 
-  it('detects an image nested inside a tool-result', () => {
+  it('detects an image in a tool-result message', () => {
     const session = fakeSession([toolResultWithImage(0)])
     expect(nodeHasImage(session, 0)).toBe(true)
   })
@@ -101,7 +100,7 @@ describe('findImageSpans', () => {
     expect(spans[1]!.seqs).toEqual([2])
   })
 
-  it('finds nested tool-result images', () => {
+  it('finds tool-result message images', () => {
     const session = fakeSession([toolResultWithImage(0)])
     const spans = findImageSpans(session)
     expect(spans).toHaveLength(1)
@@ -131,17 +130,11 @@ describe('expandToBalancedSpan', () => {
 })
 
 describe('countImagesInBlocks', () => {
-  it('counts top-level and nested images', () => {
+  it('counts image blocks in the current flat content array', () => {
     const blocks: ContentBlock[] = [
       { type: 'text', text: 'x' },
       { type: 'image', attachment: { attachmentId: AttachmentId('a'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
-      {
-        type: 'tool-result',
-        toolCallId: CallId('c'),
-        content: [
-          { type: 'image', attachment: { attachmentId: AttachmentId('b'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
-        ],
-      },
+      { type: 'image', attachment: { attachmentId: AttachmentId('b'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
     ]
     expect(countImagesInBlocks(blocks)).toBe(2)
   })

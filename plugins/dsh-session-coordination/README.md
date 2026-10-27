@@ -1,6 +1,6 @@
 # dsh-session-coordination
 
-Adds five Codex-style tools for coordination across independent top-level Sessions in DeepSeek Harness `0.1.1-rc.2`:
+Adds five Codex-style tools for coordination across independent top-level Sessions in DeepSeek Harness `0.2.0-rc.2`:
 
 - `list_threads`
 - `read_thread`
@@ -14,11 +14,13 @@ Adds five Codex-style tools for coordination across independent top-level Sessio
 
 ```sh
 pnpm --filter dsh-session-coordination build
-pnpm dlx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
+pnpm dlx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-session-coordination
 ```
 
-Compatibility is intentionally limited to the tested `0.1.1-rc.2` Host contract.
+Compatibility is intentionally limited to the tested `0.2.0-rc.2` Host contract.
 
 ## Bug history
 
 - [2026-08-16: cold-resumed Session failed with `prompt variable "{{model}}" has no value`](docs/bug-2026-08-16-cold-resume-model-variable.md) — fixed by passing the Session's last routed provider/model to `agents.resume`.
+
+Legacy history recovery is documented in [history-migration.md](docs/history-migration.md). New peer relays use the official `agent-message` source so they can be migrated by the current Session codec.

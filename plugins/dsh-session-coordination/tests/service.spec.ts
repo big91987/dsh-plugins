@@ -93,7 +93,7 @@ describe('SessionCoordination delivery', () => {
     expect(receipt.messageId).toBeTruthy()
     expect(followup).toHaveBeenCalledWith(expect.objectContaining({
       content: [{ type: 'text', text: 'check this' }],
-      source: { kind: 'session-relay', form: 'relay', senderSessionId: SessionId('sender') },
+      source: { kind: 'agent-message', form: 'relay', senderSessionId: SessionId('sender') },
     }))
   })
 

@@ -23,7 +23,7 @@ The published `@deepseek-ai/dsh-client-ui-workspace@0.1.0-rc.6` package exports 
 The preserved in-tree experiment added a new action registry precisely because the upstream package lacks one:
 
 ```text
-/Users/zhaojiuzhou/work/deepseek-harness/.worktrees/session-workspaces/packages/client/ui-workspace/src/client/session-row-actions.ts
+<upstream-reference>/.worktrees/session-workspaces/packages/client/ui-workspace/src/client/session-row-actions.ts
 ```
 
 Therefore an additive browser plugin cannot register the requested right-click entries through an rc.6 public UI interface.

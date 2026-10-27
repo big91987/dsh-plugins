@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -22,7 +22,7 @@ describe('browser preview Agent tools', () => {
     ])
 
     const result = await ctx.tools.execute({
-      callId: CallId('open-browser'),
+      callId: ToolCallId('open-browser'),
       name: 'browser_preview_open',
       arguments: { url: 'https://example.com' },
       signal: new AbortController().signal,

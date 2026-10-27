@@ -20,8 +20,8 @@ The script built both workspace packages, installed their absolute package direc
 ## Observed dependencies
 
 ```text
-dsh-worktree link:/Users/zhaojiuzhou/work/dsh-plugins/plugins/dsh-worktree
-dsh-session-coordination link:/Users/zhaojiuzhou/work/dsh-plugins/plugins/dsh-session-coordination
+dsh-worktree link:<plugin-repository>/plugins/dsh-worktree
+dsh-session-coordination link:<plugin-repository>/plugins/dsh-session-coordination
 ```
 
 The two packages were separate profile dependencies. Neither package installed the other.

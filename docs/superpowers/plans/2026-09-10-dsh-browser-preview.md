@@ -312,7 +312,7 @@ Expected: all PASS.
 
 Run: `dsh plugin --profile web remove dsh-f12-inspector`
 
-Run: `dsh plugin --profile web add /Users/zhaojiuzhou/work/dsh-plugins/plugins/dsh-browser-preview`
+Run: `dsh plugin --profile web add <plugin-repository>/plugins/dsh-browser-preview`
 
 Restart the existing DSH Web process with its current pinned CLI. Hard-refresh the active tab and verify that the old F12 entry is absent and the new Browser entry opens the compact panel.
 

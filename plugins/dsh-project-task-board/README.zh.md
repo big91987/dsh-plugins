@@ -2,6 +2,8 @@
 
 [English](README.md) | 中文
 
+适配 DSH `0.2.0-rc.2` 与 Cordis `~4.0.4`。
+
 这是 `@linxin666/dsh-client-ui-task-board@0.3.6` 的独立 Fork，在原有 Host 权威任务账本、真实 DSH 会话执行、Host cron 调度和空闲睡眠保护能力上增加项目切换。插件只通过 `cordis.patch.yml` 与 profile 机制挂载，不修改 DSH 或上游插件源码。
 
 - 浏览器只是异步视图；关闭页面不会停止 Host 调度或执行结算。
@@ -25,7 +27,7 @@
 
 ## 架构与协议
 
-- `src/index.ts` 通过官方 `@deepseek-ai/dsh-host-apiproxy` 与 `@deepseek-ai/dsh-host-webserver` SDK 挂载 Host 服务。
+- `src/index.ts` 通过官方 `@deepseek-ai/dsh-api-session-controller` 与 `@deepseek-ai/dsh-host-webserver` SDK 挂载 Host 服务。
 - `src/host-ledger.ts` 串行动作，并用临时文件加原子 rename 持久化 `{ schemaVersion: 2, revision, tasks, scheduler, recentRequests }`。
 - `src/host-service.ts` 负责 cron tick、错过触发跳过、runner 启动、重启对账和电源保护理由。
 - `src/client/host-api.ts` 单次导入旧浏览器数据、提交幂等动作，并把 Host snapshot 当作唯一已确认 UI 状态。
@@ -37,9 +39,11 @@
 本 Fork 与上游插件共用 `$DSH_HOME/task-board/ledger-v2.json` 和相同 Host 路由，不能同时安装。先移除上游包，再从本仓库安装并重启 `dsh web`：
 
 ```sh
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
-npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove @linxin666/dsh-client-ui-task-board
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./plugins/dsh-project-task-board
 ```
+
+安装或升级前先执行 `pnpm --filter dsh-project-task-board build`。已有安装可通过同一 CLI 移除并重新添加本源码包，再重启 Host；v2 账本、请求指纹及浏览器回退数据格式保持不变。客户端设置页通过官方 ConfigForm 编辑 `ui-project-task-board` Host 条目，已接受的配置变更会重启该 Host fiber。有 session id 的在途 execution 在重启后继续观察；无 session id 的启动中断取消且不重发。
 
 移除上游包或本 Fork 都不会删除现有任务账本。切换安装前仍建议备份 `~/.dsh/task-board/ledger-v2.json`。
 

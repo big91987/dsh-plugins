@@ -15,8 +15,8 @@ type EntryProps = PropsRuntime<'conversation.session.header.utilities'> & Inject
 
 const ACTIVE_ATTRIBUTE = 'data-dsh-browser-preview-active'
 
-function findDetailsColumn(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-pane="details"], [class*="detailsCol"]')
+function findRightbarColumn(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-rightbar-col]')
 }
 
 function normalizeAddress(value: string): string {
@@ -158,24 +158,24 @@ export function BrowserPreviewEntry(props: EntryProps) {
   const api = useMemo(() => new BrowserPreviewHostApi(sessionId), [sessionId])
   const [snapshot, setSnapshot] = useState<BrowserSnapshot | null>(null)
   const [active, setActive] = useState(false)
-  const [target, setTarget] = useState<HTMLElement | null>(() => findDetailsColumn())
+  const [target, setTarget] = useState<HTMLElement | null>(() => findRightbarColumn())
   const visibleKey = `dsh.browser-preview.visible.${sessionId}`
 
   const activate = (): void => {
     document.documentElement.setAttribute(ACTIVE_ATTRIBUTE, sessionId)
     localStorage.setItem(visibleKey, '1')
     setActive(true)
-    layout.openDetails()
+    layout.openRightbar(true, false)
   }
   const deactivate = (): void => {
     if (document.documentElement.getAttribute(ACTIVE_ATTRIBUTE) === sessionId) document.documentElement.removeAttribute(ACTIVE_ATTRIBUTE)
     localStorage.removeItem(visibleKey)
     setActive(false)
-    layout.closeDetails()
+    layout.closeRightbar()
   }
 
   useEffect(() => {
-    const observer = new MutationObserver(() => { setTarget(findDetailsColumn()) })
+    const observer = new MutationObserver(() => { setTarget(findRightbarColumn()) })
     observer.observe(document.body, { childList: true, subtree: true })
     void api.state().then(value => {
       setSnapshot(value)

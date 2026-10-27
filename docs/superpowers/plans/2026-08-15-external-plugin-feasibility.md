@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- `/Users/zhaojiuzhou/work/deepseek-harness` is read-only reference material.
+- `<upstream-reference>` is read-only reference material.
 - `dsh-worktree` and `dsh-session-coordination` remain independently installable and publishable.
 - Do not create an umbrella bundle or shared runtime package for the probe.
 - Use a disposable profile named `dsh-plugins-probe`; do not change the user's normal `web` profile.
@@ -209,7 +209,7 @@ git commit -m "test: probe external browser contribution"
 
 - [ ] **Step 1: Inspect the exact required upstream extension points**
 
-Compare the external probe with the preserved in-tree implementation at `/Users/zhaojiuzhou/work/deepseek-harness/.worktrees/session-workspaces`, specifically the Session-row action registry, pending Worktree slot, client runtime mirror, ApiProxy Session routes, and generated API catalog.
+Compare the external probe with the preserved in-tree implementation at `<upstream-reference>/.worktrees/session-workspaces`, specifically the Session-row action registry, pending Worktree slot, client runtime mirror, ApiProxy Session routes, and generated API catalog.
 
 - [ ] **Step 2: Test direct registration without upstream changes**
 

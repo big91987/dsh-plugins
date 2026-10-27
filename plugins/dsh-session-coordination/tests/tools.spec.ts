@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -27,7 +27,7 @@ async function fixture() {
   registerTools(ctx)
   const agent = { id: SessionId('caller'), session: { id: SessionId('caller') } }
   const call = (name: string, args: unknown) => ctx.tools.execute({
-    callId: CallId(`call-${name}`),
+    callId: ToolCallId(`call-${name}`),
     name,
     arguments: args,
     signal,
@@ -53,7 +53,7 @@ describe('Session coordination model tools', () => {
   it('requires a calling Session for cross-Session delivery', async () => {
     const { ctx } = await fixture()
     const result = await ctx.tools.execute({
-      callId: CallId('call-no-agent'),
+      callId: ToolCallId('call-no-agent'),
       name: 'send_message_to_thread',
       arguments: { thread_id: 'peer', message: 'hello' },
       signal,

@@ -55,7 +55,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 }
 
 function querySessionId(req: IncomingMessage): string | undefined {
-  const url = new URL(req.url ?? '/', 'http://dsh.local')
+  const url = new URL(req.url ?? '/', 'http://dsh.invalid')
   const value = url.searchParams.get('sessionId')
   return value === null || value.trim() !== value || value === '' ? undefined : value
 }

@@ -5,7 +5,8 @@
  */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { useEffect, useState } from 'react'
 import type { TaskBoardPowerSnapshot } from '../protocol.ts'
 import { PluginSettingsCard, BooleanField } from './PluginSettingsCard.tsx'
@@ -45,7 +46,7 @@ export class TaskBoardSettingsCardController {
   private readonly store: SnapshotStore<TaskBoardSettingsCardState>
 
   /** @param scope - the bound settings scope for the `task-board` namespace. */
-  constructor(scope: SettingsScope<TaskBoardSettings>) {
+  constructor(scope: ConfigForm<TaskBoardSettings>) {
     this.form = new CardForm(scope, [
       booleanField('enabled'),
       booleanField('announceToAgent'),
@@ -82,7 +83,7 @@ export class TaskBoardSettingsCardController {
 
 /** Props the renderer binds for the task-board card. */
 export type TaskBoardSettingsCardProps =
-  PropsRuntime<'web-ui.plugin.item'>
+  PropsRuntime<'settings.section'>
   & PropsLocale<'task-board'>
   & InjectFace<TaskBoardSettingsCardFace>
 

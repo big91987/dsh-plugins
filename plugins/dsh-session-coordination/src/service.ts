@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle, AgentOptions } from '@deepseek-ai/dsh-agent'
-import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
+import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
+
+function resolveSessionPreset(snapshot: { header: Parameters<typeof agentPresetProjectionDefinition.init>[0]; events: SessionEvent[] }): string | undefined {
+  return snapshot.events.reduce(agentPresetProjectionDefinition.apply, agentPresetProjectionDefinition.init(snapshot.header)) ?? undefined
+}
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionId, SessionSeq, SessionLogOffset, buildForkSeed, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-workspace'
 import { completedHistory } from './history.ts'
@@ -18,8 +22,8 @@ import type {
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     /** Durable message sent from one independent Session to another. */
-    'session-relay': {
-      kind: 'session-relay'
+    'agent-message': {
+      kind: 'agent-message'
       form: 'relay'
       senderSessionId: SessionId
     }
@@ -127,7 +131,7 @@ export class SessionCoordination {
     signal?.throwIfAborted()
     const message = createUserMessage({
       content: [{ type: 'text', text }],
-      source: { kind: 'session-relay', form: 'relay', senderSessionId },
+      source: { kind: 'agent-message', form: 'relay', senderSessionId },
     })
     target.followup(message)
     return { messageId: String(message.id) }
@@ -164,16 +168,19 @@ export class SessionCoordination {
     if (source.session.origin === 'subagent') {
       throw new Error(`session-coordination: Session ${sourceSessionId} is owned by subagent continuation`)
     }
-    const seed = completedHistory(String(sourceSessionId), source.events, atSeq)
+    const history = completedHistory(String(sourceSessionId), source.events, atSeq)
+    const seed = buildForkSeed(history, SessionSeq(history.at(-1)!.seq))
     const preset = resolveSessionPreset({ header: source.session, events: source.events })
     const threadId = SessionId(`session-${randomUUID()}`)
     const handle = await this.ctx.agents.create({
       sessionId: threadId,
       seed,
+      inheritedEventCount: SessionLogOffset(history.length),
       meta: {
         ...(source.session.cwd === undefined ? {} : { cwd: source.session.cwd }),
         parentSession: sourceSessionId,
-        seedLength: seed.length,
+        isSeeded: true,
+        delegationDepth: source.session.delegationDepth,
         ...(preset === undefined ? {} : { agentPreset: preset }),
       },
       ...(signal === undefined ? {} : { signal }),

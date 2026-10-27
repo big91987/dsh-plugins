@@ -1,4 +1,4 @@
-import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
+import type { HostExecutionServices } from './host-runner.ts'
 import { nextRunAtMs } from './core/schedule.ts'
 import { HostTaskLedger, type OpenedRun, type OpenExecutionReference } from './host-ledger.ts'
 import { HostExecutionRunner, SessionLaunchError, type SessionCommandDispatcher, type SessionSummary } from './host-runner.ts'
@@ -19,12 +19,14 @@ export class TaskBoardHostService {
   private disposed = false
   private pollInFlight = false
   private tickInFlight = false
+  private readonly operations = new Set<Promise<void>>()
+  private shutdown: Promise<void> | undefined
   private active = true
   private preventIdleSleep = false
   private lastPowerJson = ''
   private readonly now: () => number
 
-  constructor(api: ApiProxy, options: {
+  constructor(api: HostExecutionServices, options: {
     ledger?: HostTaskLedger
     power?: PowerInhibitor
     now?: () => number
@@ -113,12 +115,28 @@ export class TaskBoardHostService {
     }
   }
 
-  dispose(): void {
+  dispose(): void | Promise<void> {
+    if (this.disposed) return this.shutdown
     this.disposed = true
     for (const timer of this.timers.splice(0)) clearInterval(timer)
     this.power.dispose()
-    this.ledger.dispose()
     this.listeners.clear()
+    if (this.operations.size === 0) {
+      this.ledger.dispose()
+      return
+    }
+    // Cordis waits for async effect teardown before restarting this fiber.
+    // Keep ledger ownership until every accepted launch/read has settled.
+    this.shutdown = (async () => {
+      while (this.operations.size > 0) await Promise.allSettled([...this.operations])
+      this.ledger.dispose()
+    })()
+    return this.shutdown
+  }
+
+  private track(operation: Promise<void>): void {
+    this.operations.add(operation)
+    void operation.finally(() => { this.operations.delete(operation) })
   }
 
   private async launch(opened: OpenedRun): Promise<void> {
@@ -198,28 +216,29 @@ export class TaskBoardHostService {
   }
 
   private scheduleLaunch(opened: OpenedRun): void {
-    void this.launch(opened).catch(error => {
+    this.track(this.launch(opened).catch(error => {
       console.error('[dsh-project-task-board] execution launch settlement failed', error)
-    })
+    }))
   }
 
   private schedulePoll(): void {
     if (this.pollInFlight || this.disposed) return
     this.pollInFlight = true
-    void this.pollSessions().catch(error => {
+    this.track(this.pollSessions().catch(error => {
       console.error('[dsh-project-task-board] session polling failed', error)
-    }).finally(() => { this.pollInFlight = false })
+    }).finally(() => { this.pollInFlight = false }))
   }
 
   private scheduleTick(first: boolean): void {
     if (this.tickInFlight || this.disposed) return
     this.tickInFlight = true
-    void this.tickSchedule(first).catch(error => {
+    this.track(this.tickSchedule(first).catch(error => {
       console.error('[dsh-project-task-board] scheduler tick failed', error)
-    }).finally(() => { this.tickInFlight = false })
+    }).finally(() => { this.tickInFlight = false }))
   }
 
   private syncPowerReasons(): void {
+    if (this.disposed) return
     const current = this.power.snapshot()
     this.power.updateReasons({
       runningSessions: current.runningSessions,

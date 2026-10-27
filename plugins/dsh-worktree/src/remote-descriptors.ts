@@ -48,7 +48,7 @@ const WorkspaceMapping = z.object({
 const strictCodec = (typeSymbol: string, schema: z.ZodType) => ({
   mode: 'strict' as const,
   typeSymbol,
-  schema,
+  create: () => schema,
 })
 const jsonParameter = (name: string, typeSymbol: string, schema: z.ZodType) => ({
   name,
