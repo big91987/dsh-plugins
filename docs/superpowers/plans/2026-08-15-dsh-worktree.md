@@ -133,4 +133,3 @@
 - [ ] Verify all original Workspace actions still work and the browser console has no errors.
 - [ ] Remove the plugin and verify the temporary profile returns to the built-in Workspace UI.
 - [ ] Record exact commands and observed results; do not claim support beyond rc.6.
-

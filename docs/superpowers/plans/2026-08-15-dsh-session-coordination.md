@@ -97,4 +97,3 @@
 - [ ] Create two keyless Sessions and verify list, cursor-based read, A-to-B delivery, wait wakeup/timeout, and forked history.
 - [ ] Remove the plugin and verify its configuration layer and tools disappear cleanly.
 - [ ] Record exact commands and observed results; do not claim compatibility beyond the tested rc.6 release.
-
